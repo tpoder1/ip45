@@ -8,6 +8,7 @@
 
 #define IPT_IP45_INNER "inner-prefix"
 #define IPT_IP45_OUTER "outer-addr"
+#define IPT_IP45_LOG "log"
 
 #define IPT_IP45_OPT_INNER 0x01
 #define IPT_IP45_OPT_OUTER 0x02

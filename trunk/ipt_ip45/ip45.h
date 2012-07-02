@@ -1,13 +1,22 @@
+/*
+*  IP45 - Extended IP protocol 
+*  Tomas Podermanski, tpoder@cis.vutbr.cz 
+*/
 
+#ifndef _NET_IP45_H
+#define _NET_IP45_H "2012-07-02 01"
+#endif
 
 #include <linux/types.h>
 #include <asm/byteorder.h>
 
-/*
-*  IPv4.5
-*  
-*/
+#ifndef IPPROTO_IP45_DEFINED
+enum {
+  IPPROTO_IP45 = 155,   /* extended IP 4.5  - IP45          */
+};
+#endif
 
+/* IP45 address structure */
 struct in45_addr
 {
     union
@@ -21,9 +30,10 @@ struct in45_addr
 #define s45_addr32       in45_u.u45_addr32
 };
 
+/* IP45 header (standart IP header with no options + extra IP45 header */
 struct ip45hdr {
 #if defined(__LITTLE_ENDIAN_BITFIELD)
-	__u8 minorv:4,				/* minor version, always set to 5 */
+	__u8 minorv:4,					/* minor version, always set to 5 */
 		majorv:4;
 #elif defined (__BIG_ENDIAN_BITFIELD)
 	__u8	majorv:4,
@@ -41,7 +51,6 @@ struct ip45hdr {
 	__be32	saddr;
 	__be32	daddr;
 	/* extended header for IP4.5 is presented here */
-
 	__u8	nexthdr;
 	__u8	flags;
 	__u8	retlen;
@@ -49,13 +58,12 @@ struct ip45hdr {
 	struct in45_addr	retpath;
 	struct in45_addr	fwdpath;
 	__be32	sid;  
-
 	/* no IP options allowed in IP4.5 */
 };
 
 struct sockaddr_in45 {
 	sa_family_t			sin45_family;	/* Address family		*/
-	__be16				sin45_port;	/* Port number			*/
+	__be16				sin45_port;		/* Port number			*/
 	struct in45_addr	sin45_addr;
 
 };

@@ -152,17 +152,20 @@ static void ip45_save(
 	char s[50+1];
 	const struct ipt_ip45_info* info = (struct ipt_ip45_info*)target->data;
 	if (0 != (IPT_IP45_OPT_OUTER & info->ip45flags)) {
-		printf("--" IPT_IP45_OUTER " %s", inet_ntop(AF_INET, &info->outer, s, sizeof(s)));
+		printf("--" IPT_IP45_OUTER " %s ", inet_ntop(AF_INET, &info->outer, s, sizeof(s)));
 	}
 	if (0 != (IPT_IP45_OPT_INNER & info->ip45flags)) {
 		printf("--" IPT_IP45_INNER " %s/%d ", inet_ntop(AF_INET, &info->inner, s, sizeof(s)), info->inner_length);
+	}
+	if (0 != (IPT_IP45_OPT_LOG & info->ip45flags)) {
+		printf("--" IPT_IP45_LOG " ");
 	}
 }
 
 static struct option ip45_opts[] = {
 	{ .name = IPT_IP45_OUTER, .has_arg = 1, .flag = NULL, .val = '1' },
 	{ .name = IPT_IP45_INNER, .has_arg = 1, .flag = NULL, .val = '2' },
-	{ .name = "log", .has_arg = 0, .flag = NULL, .val = '4' },
+	{ .name = IPT_IP45_LOG, .has_arg = 0, .flag = NULL, .val = '3' },
 	{ .name = NULL }
 };
 

@@ -1,12 +1,11 @@
 /*
- * MAP66: Network Address Translation IPv6-to-IPv6 as
- * proposed in the IETF's second NAT66 draft document.
- * (c) 2010 sven-ola()gmx.de
+ * IP45: 
+ * inspired by MAP66 by sven-ola()gmx.de
  */
 
 #include <linux/module.h>
 #include <linux/version.h>
-#include <linux/netfilter_ipv6/ip6_tables.h>
+#include <linux/netfilter_ipv4/ip_tables.h>
 #include <net/ip.h>
 
 #include "ip45.h"
@@ -16,6 +15,15 @@ MODULE_AUTHOR("Tomas Podermanski <tpoder@cis.vutbr.cz>");
 MODULE_DESCRIPTION("Xtables: IP45 - IP45 point of attachment translation module");
 MODULE_LICENSE("GPL");
 
+static void ip45_log(
+	char str[], 
+	struct ip45hdr *ip45h)
+{
+	printk(KERN_INFO "NF IP45: %s %x -> %x | sid: %d \n", str,
+			ip45h->saddr, ip45h->daddr, ip45h->sid);
+
+}
+
 static unsigned int ip45_tg(
 	struct sk_buff *skb,
 	const struct xt_target_param *par)
@@ -24,6 +32,7 @@ static unsigned int ip45_tg(
 	const struct ipt_ip45_info *info = par->targinfo;
 	u_int32_t inner, outer;
 	int shlen = (32 - info->inner_length) / 8;
+	int log = IPT_IP45_OPT_LOG & info->ip45flags;
 
 
 	if (!skb_make_writable(skb, sizeof(struct ip45hdr))) {
@@ -37,9 +46,10 @@ static unsigned int ip45_tg(
 		return NF_DROP;
 	}
 
-	printk(KERN_INFO "XXXD  NF IP45 HDR %s() #1 %d.%d, %x -> %x | proto: %d, nexthdr: %d, sid: %d \n", __FUNCTION__,
-			ip45h->majorv, ip45h->minorv, ip45h->saddr, ip45h->daddr, ip45h->protocol, ip45h->nexthdr, ip45h->sid);
 
+	if ( log ) {
+		ip45_log("INPUT", ip45h);
+	}
 	
 	memcpy(&inner, &info->inner, sizeof(inner));
 	memcpy(&outer, &info->outer, sizeof(outer));
@@ -76,8 +86,9 @@ static unsigned int ip45_tg(
 		}
 	}
 
-	printk(KERN_INFO "XXXD  NF IP45 HDR %s() #2 %d.%d, %x -> %x | proto: %d, nexthdr: %d, sid: %d \n", __FUNCTION__,
-			ip45h->majorv, ip45h->minorv, ip45h->saddr, ip45h->daddr, ip45h->protocol, ip45h->nexthdr, ip45h->sid);
+	if ( log ) {
+		ip45_log("OUTPUT", ip45h);
+	}
 
 	return XT_CONTINUE;
 }

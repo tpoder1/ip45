@@ -1,7 +1,5 @@
 /*
- * MAP66: Network Address Translation IPv6-to-IPv6 as
- * proposed in the IETF's second NAT66 draft document.
- * (c) 2010 sven-ola()gmx.de
+ * Inspired by MAP66 by sven-ola()gmx.de
  */
 
 #include <stdio.h>
@@ -10,33 +8,34 @@
 #include <getopt.h>
 #include <arpa/inet.h>
 
+
 #define IPTABLES_VERSION_CMP(a,b,c) (((a) << 16) + ((b) << 8) + (c))
 
 #if IPTABLES_VERSION_CODE < IPTABLES_VERSION_CMP(1,4,0)
 #  include <iptables.h>
-#  define xt_entry_target ip6t_entry_target
-#  define void_entry struct ip6t_entry
-#  define void_ip6 struct ip6t_ip6
+#  define xt_entry_target ipt_entry_target
+#  define void_entry struct ipt_entry
+#  define void_ip struct ipt_ip
 #else
 #  include <xtables.h>
 #  define void_entry void
-#  define void_ip6 void
+#  define void_ip void
 #endif
 
 #if IPTABLES_VERSION_CODE < IPTABLES_VERSION_CMP(1,4,1)
-#  define xtables_target ip6tables_target
+#  define xtables_target iptables_target
 #  define XTABLES_VERSION IPTABLES_VERSION
-#  define xtables_register_target register_target6
+#  define xtables_register_target register_target
 #endif
 
 #if IPTABLES_VERSION_CODE < IPTABLES_VERSION_CMP(1,4,3)
 #  define xtables_error exit_error
 #  define  xtables_check_inverse check_inverse
-#  define NFPROTO_IPV6 PF_INET6
+#  define NFPROTO_IPV PF_INET
 #endif
 
 #ifndef XT_ALIGN
-#  define XT_ALIGN IP6T_ALIGN
+#  define XT_ALIGN IPT_ALIGN
 #endif
 
 #include "ipt_IP45.h"
@@ -44,19 +43,15 @@
 static void ip45_help(void)
 {
 	printf(
-"MAP66 target options\n"
+"IP45 target options\n"
 "  --" IPT_IP45_OUTER " outer IP address\n"
 "  --" IPT_IP45_INNER " inner IP prefix/length\n"
-"  --nocheck                      (Disables the do-not-map-to-my-addr check)\n"
-"  --csum                         (No csum neutral address change, calc csum)\n"
-"\n"
-"Note: you need two ip6tables rules to map an internal network\n"
-"using ULAs to/from external network with official IPv6 address.\n"
+"  --log                       log every packet (only for debuging)\n"
 "\n"
 "Example:\n"
 "\n"
-"iptables -t mangle -I POSTROUTING  -o eth0 -p 155 -j IP45 --" IPT_IP45_OUTER " 147.229.240.243\n"
-"iptables -t mangle -I PREROUTING   -i eth0 -p 155 -j IP45 --" IPT_IP45_INNER " 192.168.0.0/24\n");
+"iptables -t mangle -I POSTROUTING  -o eth0 -p 155 -j IP45 --" IPT_IP45_INNER " 192.168.0.0/24 --" IPT_IP45_OUTER " 147.229.240.243\n"
+"iptables -t mangle -I PREROUTING   -i eth0 -p 155 -j IP45 --" IPT_IP45_INNER " 192.168.0.0/24 --" IPT_IP45_OUTER " 147.229.240.243\n");
 }
 
 static int ip45_parse(
@@ -134,6 +129,11 @@ static int ip45_parse(
             info->ip45flags |= IPT_IP45_OPT_INNER;
 			return 1;
 		break;
+		case '3':
+            *flags |= IPT_IP45_OPT_LOG;
+            info->ip45flags |= IPT_IP45_OPT_LOG;
+			return 1;
+		break;
 	}
 	return 0;
 }
@@ -146,7 +146,7 @@ static void ip45_check(unsigned int flags)
 }
 
 static void ip45_save(
-	const void_ip6 *ip,
+	const void_ip *ip,
 	const struct xt_entry_target *target)
 {
 	char s[50+1];
@@ -162,6 +162,7 @@ static void ip45_save(
 static struct option ip45_opts[] = {
 	{ .name = IPT_IP45_OUTER, .has_arg = 1, .flag = NULL, .val = '1' },
 	{ .name = IPT_IP45_INNER, .has_arg = 1, .flag = NULL, .val = '2' },
+	{ .name = "log", .has_arg = 0, .flag = NULL, .val = '4' },
 	{ .name = NULL }
 };
 

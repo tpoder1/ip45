@@ -8,8 +8,8 @@
 #include <linux/version.h>
 #include <linux/netfilter_ipv6/ip6_tables.h>
 #include <net/ip.h>
-#include <linux/ip45.h>
 
+#include "ip45.h"
 #include "ipt_IP45.h"
 
 MODULE_AUTHOR("Tomas Podermanski <tpoder@cis.vutbr.cz>");

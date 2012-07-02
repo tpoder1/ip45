@@ -15,12 +15,41 @@ MODULE_AUTHOR("Tomas Podermanski <tpoder@cis.vutbr.cz>");
 MODULE_DESCRIPTION("Xtables: IP45 - IP45 point of attachment translation module");
 MODULE_LICENSE("GPL");
 
+
+#define NIP45FMT "%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d"
+#define NIP45QUAD(addr) \
+    ((unsigned char *)&addr)[0], \
+    ((unsigned char *)&addr)[1], \
+    ((unsigned char *)&addr)[2], \
+    ((unsigned char *)&addr)[3], \
+    ((unsigned char *)&addr)[4], \
+    ((unsigned char *)&addr)[5], \
+    ((unsigned char *)&addr)[6], \
+    ((unsigned char *)&addr)[7], \
+    ((unsigned char *)&addr)[8], \
+    ((unsigned char *)&addr)[9], \
+    ((unsigned char *)&addr)[10], \
+    ((unsigned char *)&addr)[11], \
+    ((unsigned char *)&addr)[12], \
+    ((unsigned char *)&addr)[13], \
+    ((unsigned char *)&addr)[14], \
+    ((unsigned char *)&addr)[15]
+
+#define NIPFMT "%d.%d.%d.%d"
+#define NIPQUAD(addr) \
+    ((unsigned char *)&addr)[0], \
+    ((unsigned char *)&addr)[1], \
+    ((unsigned char *)&addr)[2], \
+    ((unsigned char *)&addr)[3]
+
 static void ip45_log(
 	char str[], 
 	struct ip45hdr *ip45h)
 {
-	printk(KERN_INFO "NF IP45: %s %x -> %x | sid: %d \n", str,
-			ip45h->saddr, ip45h->daddr, ip45h->sid);
+	printk(KERN_INFO "NF IP45: %s " NIPFMT " -> " NIPFMT " [IP45 " NIP45FMT " -> " NIP45FMT "] [SID:%X] \n", str,
+			NIPQUAD(ip45h->saddr), NIPQUAD(ip45h->daddr), 
+			NIP45QUAD(ip45h->fwdpath), NIP45QUAD(ip45h->retpath),
+			ip45h->sid);
 
 }
 

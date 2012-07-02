@@ -1,5 +1,5 @@
 /*
- * IP45: IP45 hateway translation module
+ * IP45: IP45 gateway translation module
  * (c) 2012 tpoder@cis.vutbr.cz
  */
 
@@ -11,6 +11,7 @@
 
 #define IPT_IP45_OPT_INNER 0x01
 #define IPT_IP45_OPT_OUTER 0x02
+#define IPT_IP45_OPT_LOG   0x04
 
 struct ipt_ip45_info {
 	struct in_addr		outer;			/* The external IP adress */

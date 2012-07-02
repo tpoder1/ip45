@@ -1,7 +1,7 @@
 obj-m := ipt_IP45.o
 KVERSION := $(shell uname -r)
 KPATH := /lib/modules/$(KVERSION)/build
-IPTABLES_VERSION := $(shell (/sbin/ip6tables --version 2>&- || ip6tables --version)|sed 's/^.*\([[:digit:]]\+\.[[:digit:]]\+\.[[:digit:]]\+\).*/\1/')
+IPTABLES_VERSION := $(shell (/sbin/iptables --version 2>&- || ip6tables --version)|sed 's/^.*\([[:digit:]]\+\.[[:digit:]]\+\.[[:digit:]]\+\).*/\1/')
 IPTABLES_VERSION_CODE := $(shell echo $$(( $$(echo $(IPTABLES_VERSION)|sed 's/^.*\([[:digit:]]\+\)\.\([[:digit:]]\+\)\.\([[:digit:]]\+\).*/\1 * 65536 + \2 * 256 + \3/') )))
 ifeq ($(DEBUG),1)
 EXTRA_CFLAGS := -DDEBUG

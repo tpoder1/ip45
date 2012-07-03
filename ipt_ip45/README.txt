@@ -23,3 +23,14 @@ dkms install -m ipt_IP45 -v 0.1
 
 https://wiki.kubuntu.org/Kernel/Dev/DKMSPackaging
 
+NOTE FOR COOPERATION WITH SNAT
+====================================================
+When the ipt_IP45 is run tigether with NAT the packets begonging 
+to IP45 do not have to pass to the NAT table. It could be done 
+by specyfing NAT rule with a condition to ignore IP45 packets.
+
+Example:
+
+iptables -t nat -A POSTROUTING -o eth1 ! -p 155 -j SNAT --to-source 10.13.114.115
+
+

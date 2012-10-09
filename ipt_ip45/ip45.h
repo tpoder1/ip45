@@ -4,7 +4,7 @@
 */
 
 #ifndef _NET_IP45_H
-#define _NET_IP45_H "2012-07-02 01"
+#define _NET_IP45_H "2012-10-09 01"
 #endif
 
 #include <linux/types.h>
@@ -53,10 +53,10 @@ struct ip45hdr {
 	/* extended header for IP4.5 is presented here */
 	__u8	nexthdr;
 	__u8	flags;
-	__u8	retlen;
-	__u8	fwdlen;
-	struct in45_addr	retpath;
-	struct in45_addr	fwdpath;
+	__u8	smark;
+	__u8	dmark;
+	struct in45_addr	s45addr;
+	struct in45_addr	d45addr;
 	__be32	sid;  
 	/* no IP options allowed in IP4.5 */
 };

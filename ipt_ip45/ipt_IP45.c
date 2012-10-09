@@ -48,7 +48,7 @@ static void ip45_log(
 {
 	printk(KERN_INFO "NF IP45: %s " NIPFMT " -> " NIPFMT " [IP45 " NIP45FMT " -> " NIP45FMT "] [SID:%X] \n", str,
 			NIPQUAD(ip45h->saddr), NIPQUAD(ip45h->daddr), 
-			NIP45QUAD(ip45h->fwdpath), NIP45QUAD(ip45h->retpath),
+			NIP45QUAD(ip45h->d45addr), NIP45QUAD(ip45h->s45addr),
 			ip45h->sid);
 
 }
@@ -86,11 +86,11 @@ static unsigned int ip45_tg(
 	/* test whether the source address is part og inner prefix  -> update return path */
 	/* shift address to right (32 - masklen) / 4 */
 	if ( (ip45h->saddr << (32 - info->inner_length) ) == (inner << (32 - info->inner_length)) ) {
-		u_int8_t *retpath = (u_int8_t *)&ip45h->retpath;
+		u_int8_t *s45addr = (u_int8_t *)&ip45h->s45addr;
 		u_int32_t oldip = ip45h->saddr;
 		
-		ip45h->retlen += shlen;
-		memcpy(retpath + 12 - ip45h->retlen , &outer, sizeof(outer));
+		ip45h->smark += shlen;
+		memcpy(s45addr + 12 - ip45h->smark , &outer, sizeof(outer));
 		ip45h->saddr = outer;
 		csum_replace4(&ip45h->check, oldip, ip45h->saddr);
 	}
@@ -102,15 +102,15 @@ static unsigned int ip45_tg(
 	*     part (on the mark position) and prefix defined by rule  
  	*/
 	if ( ip45h->daddr == outer ) {
-		u_int8_t *fwdpath = (u_int8_t *)&ip45h->fwdpath;
+		u_int8_t *d45addr = (u_int8_t *)&ip45h->d45addr;
 		u_int8_t *daddr = (u_int8_t *)&ip45h->daddr;
 		u_int32_t oldip = ip45h->daddr;
 
-		if (ip45h->fwdlen > 0)  {
+		if (ip45h->dmark > 0)  {
 			// if fwdlen is set to 0 we have already processed all levels of IP45 attache points
 			memcpy(daddr, &inner, 4 - shlen);
-			memcpy(daddr + 4 - shlen, fwdpath + 16 - (int)ip45h->fwdlen, shlen);
-			ip45h->fwdlen -= shlen;
+			memcpy(daddr + 4 - shlen, d45addr + 16 - (int)ip45h->dmark, shlen);
+			ip45h->dmark -= shlen;
 			csum_replace4(&ip45h->check, oldip, ip45h->daddr);
 		}
 	}

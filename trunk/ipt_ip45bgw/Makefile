@@ -29,7 +29,6 @@ ifeq ($(PLATFORM),x86_64)
 else 
 	install libipt_ip45bgw.so /lib/xtables
 endif
-	install ip45bgw.conf /etc/modprobe.d
 
 README.txt: README.dbk
 	xmlto text README.dbk

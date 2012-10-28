@@ -6,18 +6,18 @@
 #ifndef _IPT_IP45_H
 #define _IPT_IP45_H
 
-#define IPT_IP45_INNER "inner-prefix"
-#define IPT_IP45_OUTER "outer-addr"
+#define IPT_IP45_DOWNSTREAM "downstream-prefix"
+#define IPT_IP45_UPSTREAM "upstream-addr"
 #define IPT_IP45_LOG "log"
 
-#define IPT_IP45_OPT_INNER 0x01
-#define IPT_IP45_OPT_OUTER 0x02
+#define IPT_IP45_OPT_DOWNSTREAM 0x01
+#define IPT_IP45_OPT_UPSTREAM 0x02
 #define IPT_IP45_OPT_LOG   0x04
 
-struct ipt_ip45_info {
-	struct in_addr		outer;			/* The external IP adress */
-	struct in_addr		inner;			/* The internal network address */
-	u_int16_t		inner_length;	/* The internal prefix length */
+struct ipt_ip45bgw_info {
+	struct in_addr		upstream;			/* The external - upstream IP adress */
+	struct in_addr		downstream;			/* The internal - downstream network address  */
+	u_int16_t		downstream_len;	/* The internal prefix length */
 	u_int16_t   	ip45flags;		/* Some flags */
 };
 

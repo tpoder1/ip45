@@ -60,7 +60,7 @@ static unsigned int ip45bgw_tg(
 	struct ip45hdr *ip45h = (struct ip45hdr *)ip_hdr(skb);
 	const struct ipt_ip45bgw_info *info = par->targinfo;
 	u_int32_t downstream, upstream;
-	int shlen = (32 - info->downstream_len) / 8;
+	int shlen = (32 - info->downstream_len) / 8; /* number of octets to shift */
 	int log = IPT_IP45_OPT_LOG & info->ip45flags;
 
 
@@ -86,11 +86,11 @@ static unsigned int ip45bgw_tg(
 	/* test whether the source address is part og downstream prefix  -> update return path */
 	/* shift address to right (32 - masklen) / 4 */
 	if ( (ip45h->saddr << (32 - info->downstream_len) ) == (downstream << (32 - info->downstream_len)) ) {
-		u_int8_t *s45addr = (u_int8_t *)&ip45h->s45addr;
+		u_int8_t *s45addr_begin = ip45_addr_begin(&ip45h->s45addr);
 		u_int32_t oldip = ip45h->saddr;
-		
-		ip45h->smark += shlen;
-		memcpy(s45addr + 12 - ip45h->smark , &upstream, sizeof(upstream));
+
+		memcpy(s45addr_begin - shlen , &upstream, sizeof(upstream));
+
 		ip45h->saddr = upstream;
 		csum_replace4(&ip45h->check, oldip, ip45h->saddr);
 	}

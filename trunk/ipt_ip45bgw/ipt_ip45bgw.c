@@ -46,10 +46,10 @@ static void ip45bgw_log(
 	char str[], 
 	struct ip45hdr *ip45h)
 {
-	printk(KERN_INFO "NF IP45: %s " NIPFMT " -> " NIPFMT " [IP45 " NIP45FMT " -> " NIP45FMT "] [SID:%X] \n", str,
+	printk(KERN_INFO "NF IP45: %s " NIPFMT " -> " NIPFMT " [IP45 " NIP45FMT " -> " NIP45FMT "] [SID:%lX] \n", str,
 			NIPQUAD(ip45h->saddr), NIPQUAD(ip45h->daddr), 
 			NIP45QUAD(ip45h->d45addr), NIP45QUAD(ip45h->s45addr),
-			ip45h->sid);
+			(unsigned long)ip45h->sid);
 
 }
 
@@ -70,7 +70,7 @@ static unsigned int ip45bgw_tg(
 	}
 
 	/* check values in header */
-	if (ip45h->majorv != 4 || ip45h->minorv !=5 || ip45h->protocol != IPPROTO_IP45) {
+	if (ip45h->mver != 4 || ip45h->sver !=5 || ip45h->protocol != IPPROTO_IP45) {
 		printk(KERN_ERR "IP45: invalid IP45 packet\n");
 		return NF_DROP;
 	}
@@ -92,7 +92,7 @@ static unsigned int ip45bgw_tg(
 		memcpy(s45addr_begin - shlen , &upstream, sizeof(upstream));
 
 		ip45h->saddr = upstream;
-		csum_replace4(&ip45h->check, oldip, ip45h->saddr);
+		csum_replace4(&ip45h->check1, oldip, ip45h->saddr);
 	}
 
 	/* test whether the destination address is upstream address 
@@ -111,7 +111,7 @@ static unsigned int ip45bgw_tg(
 			memcpy(daddr, &downstream, 4 - shlen);
 			memcpy(daddr + 4 - shlen, d45addr + 16 - (int)ip45h->dmark, shlen);
 			ip45h->dmark -= shlen;
-			csum_replace4(&ip45h->check, oldip, ip45h->daddr);
+			csum_replace4(&ip45h->check1, oldip, ip45h->daddr);
 		}
 	}
 

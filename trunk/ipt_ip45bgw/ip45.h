@@ -4,7 +4,7 @@
 */
 
 #ifndef _NET_IP45_H
-#define _NET_IP45_H "2012-10-09 01"
+#define _NET_IP45_H "2012-11-05 01"
 #endif
 
 #include <linux/types.h>
@@ -12,7 +12,7 @@
 
 #ifndef IPPROTO_IP45_DEFINED
 enum {
-  IPPROTO_IP45 = 155,   /* extended IP 4.5  - IP45          */
+  IPPROTO_IP45 = 155,   /* IP 4.5  - IP45          */
 };
 #endif
 
@@ -33,11 +33,11 @@ struct in45_addr
 /* IP45 header (standart IP header with no options + extra IP45 header */
 struct ip45hdr {
 #if defined(__LITTLE_ENDIAN_BITFIELD)
-	__u8 minorv:4,					/* minor version, always set to 5 */
-		majorv:4;
+	__u8	sver:4,					/* sub version, always set to 5 */
+			mver:4;					/* major version, always set to 4 */
 #elif defined (__BIG_ENDIAN_BITFIELD)
-	__u8	majorv:4,
-  		minorv:4;					/* minor version, always set to 5 */
+	__u8	mver:4,
+ 			sver:4;	
 #else
 #error	"Please fix <asm/byteorder.h>"
 #endif
@@ -47,17 +47,24 @@ struct ip45hdr {
 	__be16	frag_off;
 	__u8	ttl;
 	__u8	protocol;	/* have to always be set to IPPROTO_IP45 */ 
-	__sum16	check;
+	__sum16	check1;
 	__be32	saddr;
 	__be32	daddr;
 	/* extended header for IP4.5 is presented here */
 	__u8	nexthdr;
-	__u8	flags;
-	__u8	smark;
-	__u8	dmark;
+#if defined(__LITTLE_ENDIAN_BITFIELD)
+	__u8	flags:4,
+			dmark:4;
+#elif defined (__BIG_ENDIAN_BITFIELD)
+	__u8	dmark:4,
+	  		flags:4;				
+#else
+#error	"Please fix <asm/byteorder.h>"
+#endif
+	__sum16	check2;
 	struct in45_addr	s45addr;
 	struct in45_addr	d45addr;
-	__be32	sid;  
+	__be64	sid;  
 	/* no IP options allowed in IP4.5 */
 };
 
@@ -90,8 +97,8 @@ static inline struct ip45hdr *ip45_hdr(const struct sk_buff *skb)
 
 static inline int is_ip45(const struct sk_buff *skb)
 {
-	return (ip45_hdr(skb)->majorv == 4 && \
-			ip45_hdr(skb)->minorv == 5 && \
+	return (ip45_hdr(skb)->mver == 4 && \
+			ip45_hdr(skb)->sver == 5 && \
 			ip45_hdr(skb)->protocol == IPPROTO_IP45);
 }
 #endif

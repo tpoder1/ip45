@@ -1,0 +1,86 @@
+
+ip45 patch for glibc 
+=======================================
+
+The patch updates functions inet_pton and inet_ntop to 
+support IP45. The function inet_pton accepts addres 
+in the following format for address type AF_INET6:
+
+147.229.240.249.3.15 -> converts to binary format 
+
+The function inet_ntop tries to perform reverse function. 
+There applied following rules that keeps formating 
+of the adress in the original IPv6 notation. The 
+address that is formated to IP45 notation have to 
+fulfill follwing rules: 
+
+1. The first 4 octets are set to 0 
+2. Last 4 octets are not set to 0 
+3. Octests 1-10 are set to 0 and octest 12,13 are set to 0xFF (IPv4 mapped address)
+
+
+Applying patch to the source glibc code
+========================================
+1. Get glibc source from http://www.gnu.org/software/libc/ (eg. glibc-2.15.tar.gz)
+2. Unpack source 
+  
+  # tar xzf glibc-2.15.tar.gz
+
+3. Apply the patch 
+
+  # cd glibc-2.15
+  # patch -p1 < ../glibc-ip45-resolv.patch 
+  patching file resolv/inet_ntop.c
+  patching file resolv/inet_pton.c
+
+4. Follow instructions to recompile and install glibc source 
+
+
+Applying patch to source RPM 
+========================================
+1. Get glibc .src.rpm for your distribution (eg. glibc-2.12-1.80.el6_3.6.src.rpm)
+2. Install .src.rpm file 
+
+  # rpm -ihvv glibc-2.12-1.80.el6_3.6.src.rpm 
+
+3. Copy patch to rpm SOURCES directory 
+
+  # cp glibc-ip45-resolv.patch /root/rpmbuild/SOURCES
+  
+4. Open glibc.spec file 
+
+  # vim  /root/rpmbuild/SPECS/glibc.spec 
+
+5. Find end of the Patch section in the specfile and add following line 
+
+  Patch106: glibc-ip45-resolv.patch 
+
+  and following line in %prep section !!
+
+  %patch106 -p1 
+
+  // The number of the patch have to follow the patch numbering used in the file 
+  // You can also update Release: macro to distinguish the package from the 
+  // original glibc source.rpm. The release might loog following 
+
+  Release: 1.80%{?dist}.6ip45
+
+6.  Switch to /root/rpmbuild/SPECS dir and rebuild a new rpms (src and binary) for glibc
+
+  # rpmbuild -ba glibc.spec
+
+7. Install new rpm into your system 
+
+  # cd /root/rpmbuild/RPMS
+  # cd # yum update glibc* 
+
+8. Reboot system 
+
+
+How the patch was created ? 
+========================================
+The patch was created using following commnd:
+
+diff -rupN glibc-2.12-2-gc4ccff1.orig/resolv \
+           glibc-2.12-2-gc4ccff1/resolv > glibc-ip45-resolv.patch
+

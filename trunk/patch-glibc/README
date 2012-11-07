@@ -67,12 +67,14 @@ Applying patch to source RPM
 
 6.  Switch to /root/rpmbuild/SPECS dir and rebuild a new rpms (src and binary) for glibc
 
+  # cd /root/rpmbuild/SPECS
   # rpmbuild -ba glibc.spec
 
 7. Install new rpm into your system 
 
   # cd /root/rpmbuild/RPMS
-  # cd # yum update glibc* 
+  # cd x86_64 
+  # yum update glibc* 
 
 8. Reboot system 
 

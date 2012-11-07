@@ -1,0 +1,191 @@
+diff -rupN glibc-2.12-2-gc4ccff1.orig/resolv/inet_ntop.c glibc-2.12-2-gc4ccff1/resolv/inet_ntop.c
+--- glibc-2.12-2-gc4ccff1.orig/resolv/inet_ntop.c	2010-05-04 13:27:23.000000000 +0200
++++ glibc-2.12-2-gc4ccff1/resolv/inet_ntop.c	2012-11-07 22:38:06.265447024 +0100
+@@ -46,6 +46,8 @@ static const char *inet_ntop4 (const u_c
+      internal_function;
+ static const char *inet_ntop6 (const u_char *src, char *dst, socklen_t size)
+      internal_function;
++static const char *inet_ntop45 (const u_char *src, char *dst, socklen_t size)
++     internal_function;
+ 
+ /* char *
+  * inet_ntop(af, src, dst, size)
+@@ -62,11 +64,17 @@ inet_ntop(af, src, dst, size)
+ 	char *dst;
+ 	socklen_t size;
+ {
++	const char *ret;
++
+ 	switch (af) {
+ 	case AF_INET:
+ 		return (inet_ntop4(src, dst, size));
+ 	case AF_INET6:
+-		return (inet_ntop6(src, dst, size));
++		ret = (inet_ntop45(src, dst, size));
++        if (ret == NULL)
++			return (inet_ntop6(src, dst, size));
++		else 
++			return ret;
+ 	default:
+ 		__set_errno (EAFNOSUPPORT);
+ 		return (NULL);
+@@ -201,3 +209,64 @@ inet_ntop6(src, dst, size)
+ 	}
+ 	return strcpy(dst, tmp);
+ }
++
++/* const char *
++ * inet_ntop45(src, dst, size)
++ *	format an IPv45 address
++ * return:
++ *	`dst' (as a const)
++ * notes:
++ *	(1) uses no statics
++ *	(2) takes a u_char* not an in_addr as input
++ * author:
++ *	Tomas Podermanski, 2012.
++ */
++static const char *
++internal_function
++inet_ntop45(src, dst, size)
++	const u_char *src;
++	char *dst;
++	socklen_t size;
++{
++	char tmp[16 * sizeof "255." - 1], *tp;
++	int octet;
++
++	for (octet = 0; octet < 16; octet++) {
++		if (src[octet] != 0) 
++			break;
++	}
++
++	/* first 4 octets are not set to 0 - not valid IP45 address */
++	if (octet < 4) {
++		__set_errno (ENOSPC);
++		return (NULL);
++	}
++
++	/* some of last 4 octets are set to 0 - not valid IP45 address */
++	if (octet > 12) {
++		__set_errno (ENOSPC);
++		return (NULL);
++	}
++
++	/*         0 1  2 3  4 5  6 7  8 9  1011 1213 1415
++	/* address 0000:0000:0000:0000:0000:ffff:xxxx:xxxx - mapped IPv4 address - not valid IP45 address*/
++	if (octet == 10  && src[10] == 0xff && src[11] == 0xff) {
++		__set_errno (ENOSPC);
++		return (NULL);
++	}
++
++	tp = tmp;
++	for (; octet < 16 ; octet++) {
++		tp += SPRINTF((tp, "%u", src[octet]));
++		if ( octet != 15 ) {
++			*tp++ = '.';
++		}
++	}
++	*tp++ = '\0';
++
++	if ((socklen_t)(tp - tmp) > size) {
++		__set_errno (ENOSPC);
++		return (NULL);
++	}
++	return strcpy(dst, tmp);
++}
+diff -rupN glibc-2.12-2-gc4ccff1.orig/resolv/inet_pton.c glibc-2.12-2-gc4ccff1/resolv/inet_pton.c
+--- glibc-2.12-2-gc4ccff1.orig/resolv/inet_pton.c	2010-05-04 13:27:23.000000000 +0200
++++ glibc-2.12-2-gc4ccff1/resolv/inet_pton.c	2012-11-07 13:18:13.585645000 +0100
+@@ -36,6 +36,8 @@ static const char rcsid[] = "$BINDId: in
+ 
+ static int inet_pton4 (const char *src, u_char *dst) internal_function;
+ static int inet_pton6 (const char *src, u_char *dst) internal_function;
++static int inet_pton45 (const char *src, u_char *dst) internal_function;
++
+ 
+ /* int
+  * inet_pton(af, src, dst)
+@@ -54,11 +56,16 @@ inet_pton(af, src, dst)
+ 	const char *src;
+ 	void *dst;
+ {
++	int ret; 
++
+ 	switch (af) {
+ 	case AF_INET:
+ 		return (inet_pton4(src, dst));
+ 	case AF_INET6:
+-		return (inet_pton6(src, dst));
++		ret = (inet_pton6(src, dst));
++		if (ret <= 0) 
++			return (inet_pton45(src, dst));
++		return ret;
+ 	default:
+ 		__set_errno (EAFNOSUPPORT);
+ 		return (-1);
+@@ -133,7 +140,7 @@ inet_pton4(src, dst)
+  *	Paul Vixie, 1996.
+  */
+ static int
+-internal_function
++/* internal_function */
+ inet_pton6(src, dst)
+ 	const char *src;
+ 	u_char *dst;
+@@ -219,3 +226,55 @@ inet_pton6(src, dst)
+ 	memcpy(dst, tmp, NS_IN6ADDRSZ);
+ 	return (1);
+ }
++
++/* int
++ * inet_pton45(src, dst)
++ * return:
++ *	1 if `src' is a valid dotted quad, else 0.
++ * notice:
++ *	does not touch `dst' unless it's returning 1.
++ * author:
++ *	Tomas Podermanski, 2012.
++ */
++static int
++/* internal_function */
++inet_pton45(src, dst)
++	const char *src;
++	u_char *dst;
++{
++	int saw_digit, octets, ch;
++	u_char tmp[16], *tp;
++
++	saw_digit = 0;
++	octets = 0;
++	*(tp = tmp) = 0;
++	while ((ch = *src++) != '\0') {
++
++		if (ch >= '0' && ch <= '9') {
++			u_int new = *tp * 10 + (ch - '0');
++
++			if (saw_digit && *tp == 0)
++				return (0);
++			if (new > 255)
++				return (0);
++			*tp = new;
++			if (! saw_digit) {
++				if (++octets > 4 * 4)
++					return (0);
++				saw_digit = 1;
++			}
++		} else if (ch == '.' && saw_digit) {
++			if (octets == 16)
++				return (0);
++			*++tp = 0;
++			saw_digit = 0;
++		} else
++			return (0);
++	}
++	if (octets < 4)
++		return (0);
++	memset(dst, 0, 16 * sizeof(u_char));
++	memcpy(dst + 16 - octets, tmp, octets);
++	return (1);
++}
++

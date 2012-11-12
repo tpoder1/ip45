@@ -13,12 +13,13 @@ if (!defined($ARGV[0])) {
 my $num = 0;
 my $inpatch = 0;
 my $inpatch2 = 0;
+my $inpatch3 = 0;
 my $applied = 0;
 my $patchname = $ARGV[0];
 my $extname=$ARGV[1];
 while (<STDIN>) {
 
-	if (/(Release:)(.+)/) {
+	if (/^(Release:)(.+)$/) {
 		printf "%s%s%s\n", $1, $2, $extname;
 		next;
 	}
@@ -42,7 +43,14 @@ while (<STDIN>) {
 	if ($_ eq "\n" && $inpatch2 && !$applied) {
 		printf "%%patch%d -p1\n", $num;
 		$inpatch2 = 0;
+	}
 
+	if (/ApplyOptionalPatch .*/) {
+		$inpatch3 = 1;
+	}
+	if ($_ eq "\n" && $inpatch3 && !$applied) {
+		printf "ApplyOptionalPatch %s\n", $patchname;
+		$inpatch3 = 0;
 	}
 
 	print $_;

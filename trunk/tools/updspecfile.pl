@@ -18,8 +18,8 @@ my $patchname = $ARGV[0];
 my $extname=$ARGV[1];
 while (<STDIN>) {
 
-	if (/(Name:)(.+)/) {
-		printf "%s%s-%s\n", $1, $2, $extname;
+	if (/(Release:)(.+)/) {
+		printf "%s%s%s\n", $1, $2, $extname;
 		next;
 	}
 
@@ -41,6 +41,7 @@ while (<STDIN>) {
 	}
 	if ($_ eq "\n" && $inpatch2 && !$applied) {
 		printf "%%patch%d -p1\n", $num;
+		$inpatch2 = 0;
 
 	}
 

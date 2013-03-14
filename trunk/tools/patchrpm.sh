@@ -24,8 +24,14 @@ case $SPECF in
 	;; 
 	"kernel")
 		PATCH="../patch-linux/linux-kernel-ip45.patch"
+		BUILDOPTS="--without kabichk" 
 		echo "CONFIG_IP45=y" >> ~/rpmbuild/SOURCES/config-generic
 		echo "# CONFIG_IP45_DEBUG is not set" >> ~/rpmbuild/SOURCES/config-generic
+	;;
+	"tcpdump")
+		PATCH="../patch-tcpdump/tcpdump-ip45.patch"
+#		echo "CONFIG_IP45=y" >> ~/rpmbuild/SOURCES/config-generic
+#		echo "# CONFIG_IP45_DEBUG is not set" >> ~/rpmbuild/SOURCES/config-generic
 	;;
 	*) 
 		echo "Unsupported pkg $SPECF "
@@ -39,7 +45,7 @@ cp $PATCH ~/rpmbuild/SOURCES
 cd ~/rpmbuild/SPECS/ || exit 1;
 $CDIR//updspecfile.pl $(basename $PATCH) $SUFIX < $SPECF.spec > $SPECF.spec.tmp
 mv $SPECF.spec.tmp $SPECF.spec
-rpmbuild -ba --clean $SPECF.spec
+time rpmbuild -ba --clean $BUILDOPTS $SPECF.spec
 
 
 

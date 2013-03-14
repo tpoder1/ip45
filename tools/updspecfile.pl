@@ -15,6 +15,7 @@ my $inpatch = 0;
 my $inpatch2 = 0;
 my $inpatch3 = 0;
 my $applied = 0;
+my $applied2 = 0;
 my $patchname = $ARGV[0];
 my $extname=$ARGV[1];
 while (<STDIN>) {
@@ -40,9 +41,10 @@ while (<STDIN>) {
 	if (/%patch(\d+)/) {
 		$inpatch2 = 1;
 	}
-	if ($_ eq "\n" && $inpatch2 && !$applied) {
+	if ($_ eq "\n" && $inpatch2 && !$applied && !$applied2) {
 		printf "%%patch%d -p1\n", $num;
 		$inpatch2 = 0;
+		$applied2 = 1;
 	}
 
 	if (/ApplyOptionalPatch .*/) {

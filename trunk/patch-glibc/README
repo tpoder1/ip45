@@ -14,7 +14,7 @@ of the adress in the original IPv6 notation. The
 address that is formated to IP45 notation have to 
 fulfill follwing rules: 
 
-1. The first 8 bytes are set to 0 
+1. The first 4 octets are set to 0 
 2. Last 4 octets are not set to 0 
 3. Octests 1-10 are set to 0 and octest 12,13 are set to 0xFF (IPv4 mapped address)
 
@@ -67,14 +67,12 @@ Applying patch to source RPM
 
 6.  Switch to /root/rpmbuild/SPECS dir and rebuild a new rpms (src and binary) for glibc
 
-  # cd /root/rpmbuild/SPECS
   # rpmbuild -ba glibc.spec
 
 7. Install new rpm into your system 
 
   # cd /root/rpmbuild/RPMS
-  # cd x86_64 
-  # yum update glibc* 
+  # cd # yum update glibc* 
 
 8. Reboot system 
 

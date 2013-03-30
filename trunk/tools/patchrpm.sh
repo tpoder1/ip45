@@ -10,7 +10,7 @@ fi
 
 SRPM="$1"
 SPECF=$(echo $(basename $SRPM)| cut -f1 -d"-")
-REV=$(cat ../ID | grep Rev | cut -d' ' -f2)
+REV=$(cat ../ID | grep Revision | cut -d' ' -f2)
 PATCH="$2"
 SUFIX=".ip45_r${REV}"
 CDIR=$(pwd)

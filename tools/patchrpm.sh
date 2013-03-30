@@ -1,5 +1,5 @@
 #!/bin/bash
-
+ 
 if [ "$1" == "" ]; then 
 	echo "Update source rpm by applying IP45 patches"
 	echo "Usage: $0 <src.rpm name>  "

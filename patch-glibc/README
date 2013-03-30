@@ -14,7 +14,7 @@ of the adress in the original IPv6 notation. The
 address that is formated to IP45 notation have to 
 fulfill follwing rules: 
 
-1. The first 4 octets are set to 0 
+1. The first 8 bytes are set to 0 
 2. Last 4 octets are not set to 0 
 3. Octests 1-10 are set to 0 and octest 12,13 are set to 0xFF (IPv4 mapped address)
 

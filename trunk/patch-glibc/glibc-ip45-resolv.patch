@@ -1,6 +1,6 @@
 diff -rupN glibc-2.12-2-gc4ccff1.orig/resolv/inet_ntop.c glibc-2.12-2-gc4ccff1/resolv/inet_ntop.c
 --- glibc-2.12-2-gc4ccff1.orig/resolv/inet_ntop.c	2010-05-04 13:27:23.000000000 +0200
-+++ glibc-2.12-2-gc4ccff1/resolv/inet_ntop.c	2012-11-07 22:38:06.265447024 +0100
++++ glibc-2.12-2-gc4ccff1/resolv/inet_ntop.c	2013-03-30 13:16:55.715684297 +0100
 @@ -46,6 +46,8 @@ static const char *inet_ntop4 (const u_c
       internal_function;
  static const char *inet_ntop6 (const u_char *src, char *dst, socklen_t size)
@@ -10,26 +10,25 @@ diff -rupN glibc-2.12-2-gc4ccff1.orig/resolv/inet_ntop.c glibc-2.12-2-gc4ccff1/r
  
  /* char *
   * inet_ntop(af, src, dst, size)
-@@ -62,11 +64,17 @@ inet_ntop(af, src, dst, size)
- 	char *dst;
- 	socklen_t size;
- {
-+	const char *ret;
-+
+@@ -65,8 +67,16 @@ inet_ntop(af, src, dst, size)
  	switch (af) {
  	case AF_INET:
  		return (inet_ntop4(src, dst, size));
++#ifdef AF_INET45
++	case AF_INET45:
++		return (inet_ntop45(src, dst, size));
++#endif
  	case AF_INET6:
 -		return (inet_ntop6(src, dst, size));
-+		ret = (inet_ntop45(src, dst, size));
-+        if (ret == NULL)
++		if (((char *)src)[0] == 0x0 ) {
++			return (inet_ntop45(src, dst, size));
++		} else {
 +			return (inet_ntop6(src, dst, size));
-+		else 
-+			return ret;
++		}
  	default:
  		__set_errno (EAFNOSUPPORT);
  		return (NULL);
-@@ -201,3 +209,64 @@ inet_ntop6(src, dst, size)
+@@ -201,3 +211,46 @@ inet_ntop6(src, dst, size)
  	}
  	return strcpy(dst, tmp);
  }
@@ -55,28 +54,9 @@ diff -rupN glibc-2.12-2-gc4ccff1.orig/resolv/inet_ntop.c glibc-2.12-2-gc4ccff1/r
 +	char tmp[16 * sizeof "255." - 1], *tp;
 +	int octet;
 +
-+	for (octet = 0; octet < 16; octet++) {
++	for (octet = 0; octet < 16 - 4; octet++) {
 +		if (src[octet] != 0) 
 +			break;
-+	}
-+
-+	/* first 4 octets are not set to 0 - not valid IP45 address */
-+	if (octet < 4) {
-+		__set_errno (ENOSPC);
-+		return (NULL);
-+	}
-+
-+	/* some of last 4 octets are set to 0 - not valid IP45 address */
-+	if (octet > 12) {
-+		__set_errno (ENOSPC);
-+		return (NULL);
-+	}
-+
-+	/*         0 1  2 3  4 5  6 7  8 9  1011 1213 1415
-+	/* address 0000:0000:0000:0000:0000:ffff:xxxx:xxxx - mapped IPv4 address - not valid IP45 address*/
-+	if (octet == 10  && src[10] == 0xff && src[11] == 0xff) {
-+		__set_errno (ENOSPC);
-+		return (NULL);
 +	}
 +
 +	tp = tmp;
@@ -94,9 +74,10 @@ diff -rupN glibc-2.12-2-gc4ccff1.orig/resolv/inet_ntop.c glibc-2.12-2-gc4ccff1/r
 +	}
 +	return strcpy(dst, tmp);
 +}
++
 diff -rupN glibc-2.12-2-gc4ccff1.orig/resolv/inet_pton.c glibc-2.12-2-gc4ccff1/resolv/inet_pton.c
 --- glibc-2.12-2-gc4ccff1.orig/resolv/inet_pton.c	2010-05-04 13:27:23.000000000 +0200
-+++ glibc-2.12-2-gc4ccff1/resolv/inet_pton.c	2012-11-07 13:18:13.585645000 +0100
++++ glibc-2.12-2-gc4ccff1/resolv/inet_pton.c	2013-03-30 14:47:04.769852588 +0100
 @@ -36,6 +36,8 @@ static const char rcsid[] = "$BINDId: in
  
  static int inet_pton4 (const char *src, u_char *dst) internal_function;
@@ -106,7 +87,7 @@ diff -rupN glibc-2.12-2-gc4ccff1.orig/resolv/inet_pton.c glibc-2.12-2-gc4ccff1/r
  
  /* int
   * inet_pton(af, src, dst)
-@@ -54,11 +56,16 @@ inet_pton(af, src, dst)
+@@ -54,11 +56,20 @@ inet_pton(af, src, dst)
  	const char *src;
  	void *dst;
  {
@@ -115,6 +96,10 @@ diff -rupN glibc-2.12-2-gc4ccff1.orig/resolv/inet_pton.c glibc-2.12-2-gc4ccff1/r
  	switch (af) {
  	case AF_INET:
  		return (inet_pton4(src, dst));
++#ifdef AF_INET45
++	case AF_INET45:
++		return (inet_pton45(src, dst));
++#endif
  	case AF_INET6:
 -		return (inet_pton6(src, dst));
 +		ret = (inet_pton6(src, dst));
@@ -124,16 +109,7 @@ diff -rupN glibc-2.12-2-gc4ccff1.orig/resolv/inet_pton.c glibc-2.12-2-gc4ccff1/r
  	default:
  		__set_errno (EAFNOSUPPORT);
  		return (-1);
-@@ -133,7 +140,7 @@ inet_pton4(src, dst)
-  *	Paul Vixie, 1996.
-  */
- static int
--internal_function
-+/* internal_function */
- inet_pton6(src, dst)
- 	const char *src;
- 	u_char *dst;
-@@ -219,3 +226,55 @@ inet_pton6(src, dst)
+@@ -219,3 +230,54 @@ inet_pton6(src, dst)
  	memcpy(dst, tmp, NS_IN6ADDRSZ);
  	return (1);
  }
@@ -148,7 +124,7 @@ diff -rupN glibc-2.12-2-gc4ccff1.orig/resolv/inet_pton.c glibc-2.12-2-gc4ccff1/r
 + *	Tomas Podermanski, 2012.
 + */
 +static int
-+/* internal_function */
++internal_function 
 +inet_pton45(src, dst)
 +	const char *src;
 +	u_char *dst;
@@ -188,4 +164,3 @@ diff -rupN glibc-2.12-2-gc4ccff1.orig/resolv/inet_pton.c glibc-2.12-2-gc4ccff1/r
 +	memcpy(dst + 16 - octets, tmp, octets);
 +	return (1);
 +}
-+

@@ -1,6 +1,6 @@
 diff -rupN glibc-2.12-2-gc4ccff1.orig/resolv/inet_ntop.c glibc-2.12-2-gc4ccff1/resolv/inet_ntop.c
 --- glibc-2.12-2-gc4ccff1.orig/resolv/inet_ntop.c	2010-05-04 13:27:23.000000000 +0200
-+++ glibc-2.12-2-gc4ccff1/resolv/inet_ntop.c	2013-03-30 13:16:55.715684297 +0100
++++ glibc-2.12-2-gc4ccff1/resolv/inet_ntop.c	2013-03-30 15:16:38.506775177 +0100
 @@ -46,6 +46,8 @@ static const char *inet_ntop4 (const u_c
       internal_function;
  static const char *inet_ntop6 (const u_char *src, char *dst, socklen_t size)
@@ -10,7 +10,7 @@ diff -rupN glibc-2.12-2-gc4ccff1.orig/resolv/inet_ntop.c glibc-2.12-2-gc4ccff1/r
  
  /* char *
   * inet_ntop(af, src, dst, size)
-@@ -65,8 +67,16 @@ inet_ntop(af, src, dst, size)
+@@ -65,8 +67,20 @@ inet_ntop(af, src, dst, size)
  	switch (af) {
  	case AF_INET:
  		return (inet_ntop4(src, dst, size));
@@ -20,7 +20,11 @@ diff -rupN glibc-2.12-2-gc4ccff1.orig/resolv/inet_ntop.c glibc-2.12-2-gc4ccff1/r
 +#endif
  	case AF_INET6:
 -		return (inet_ntop6(src, dst, size));
-+		if (((char *)src)[0] == 0x0 ) {
++/*          0 1  2 3  4 5  6 7  8 9 1011 1213 1415 		
++/* address 0000:0000:0000:0000:0000:ffff:xxxx:xxxx - mapped IPv4 address */ 
++		if (((char *)src)[0] == 0x0 && 
++			((char *)src)[10] != 0xFF && 
++			((char *)src)[11] != 0xFF ) {
 +			return (inet_ntop45(src, dst, size));
 +		} else {
 +			return (inet_ntop6(src, dst, size));
@@ -28,7 +32,7 @@ diff -rupN glibc-2.12-2-gc4ccff1.orig/resolv/inet_ntop.c glibc-2.12-2-gc4ccff1/r
  	default:
  		__set_errno (EAFNOSUPPORT);
  		return (NULL);
-@@ -201,3 +211,46 @@ inet_ntop6(src, dst, size)
+@@ -201,3 +215,46 @@ inet_ntop6(src, dst, size)
  	}
  	return strcpy(dst, tmp);
  }

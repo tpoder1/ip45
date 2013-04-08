@@ -1,6 +1,6 @@
 diff --exclude autom4te.cache --exclude '*.o' --exclude 'config.*' --exclude Makefile --exclude 'Makefile-*' --exclude '*.orig' --exclude version.c --exclude tcpdump.1 --exclude tcpdump -rupN tcpdump/ip45.h tcpdump-ip45/ip45.h
 --- tcpdump/ip45.h	1970-01-01 01:00:00.000000000 +0100
-+++ tcpdump-ip45/ip45.h	2013-03-14 21:26:17.969297202 +0100
++++ tcpdump-ip45/ip45.h	2013-03-14 21:26:17.000000000 +0100
 @@ -0,0 +1,105 @@
 +/*
 +*  IP45 - Extended IP protocol 
@@ -109,7 +109,7 @@ diff --exclude autom4te.cache --exclude '*.o' --exclude 'config.*' --exclude Mak
 +
 diff --exclude autom4te.cache --exclude '*.o' --exclude 'config.*' --exclude Makefile --exclude 'Makefile-*' --exclude '*.orig' --exclude version.c --exclude tcpdump.1 --exclude tcpdump -rupN tcpdump/ip.h tcpdump-ip45/ip.h
 --- tcpdump/ip.h	2009-09-21 19:16:14.000000000 +0200
-+++ tcpdump-ip45/ip.h	2013-03-14 21:26:17.969297202 +0100
++++ tcpdump-ip45/ip.h	2013-03-14 21:26:17.000000000 +0100
 @@ -64,6 +64,7 @@ struct ip {
  	struct	in_addr ip_src,ip_dst;	/* source and dest address */
  };
@@ -120,7 +120,7 @@ diff --exclude autom4te.cache --exclude '*.o' --exclude 'config.*' --exclude Mak
  /*
 diff --exclude autom4te.cache --exclude '*.o' --exclude 'config.*' --exclude Makefile --exclude 'Makefile-*' --exclude '*.orig' --exclude version.c --exclude tcpdump.1 --exclude tcpdump -rupN tcpdump/ipproto.h tcpdump-ip45/ipproto.h
 --- tcpdump/ipproto.h	2009-09-21 19:16:14.000000000 +0200
-+++ tcpdump-ip45/ipproto.h	2013-03-14 21:26:17.969297202 +0100
++++ tcpdump-ip45/ipproto.h	2013-03-14 21:26:17.000000000 +0100
 @@ -142,3 +142,6 @@ extern struct tok ipproto_values[];
  #ifndef IPPROTO_MOBILITY
  #define IPPROTO_MOBILITY	135
@@ -130,7 +130,7 @@ diff --exclude autom4te.cache --exclude '*.o' --exclude 'config.*' --exclude Mak
 +#endif
 diff --exclude autom4te.cache --exclude '*.o' --exclude 'config.*' --exclude Makefile --exclude 'Makefile-*' --exclude '*.orig' --exclude version.c --exclude tcpdump.1 --exclude tcpdump -rupN tcpdump/Makefile.in tcpdump-ip45/Makefile.in
 --- tcpdump/Makefile.in	2009-09-21 19:16:14.000000000 +0200
-+++ tcpdump-ip45/Makefile.in	2013-03-14 21:26:17.970375523 +0100
++++ tcpdump-ip45/Makefile.in	2013-03-14 21:26:17.000000000 +0100
 @@ -75,6 +75,7 @@ CSRC =	addrtoname.c af.c checksum.c cpac
  	print-dccp.c print-decnet.c \
  	print-domain.c print-dtp.c print-dvmrp.c print-enc.c print-egp.c \
@@ -141,8 +141,8 @@ diff --exclude autom4te.cache --exclude '*.o' --exclude 'config.*' --exclude Mak
  	print-igrp.c print-ip.c print-ipcomp.c print-ipfc.c \
 diff --exclude autom4te.cache --exclude '*.o' --exclude 'config.*' --exclude Makefile --exclude 'Makefile-*' --exclude '*.orig' --exclude version.c --exclude tcpdump.1 --exclude tcpdump -rupN tcpdump/print-ip45.c tcpdump-ip45/print-ip45.c
 --- tcpdump/print-ip45.c	1970-01-01 01:00:00.000000000 +0100
-+++ tcpdump-ip45/print-ip45.c	2013-03-14 21:26:17.971299456 +0100
-@@ -0,0 +1,78 @@
++++ tcpdump-ip45/print-ip45.c	2013-04-08 23:32:37.891775362 +0200
+@@ -0,0 +1,79 @@
 +/*
 + * IP45 support for tcpdump 
 + */
@@ -171,7 +171,7 @@ diff --exclude autom4te.cache --exclude '*.o' --exclude 'config.*' --exclude Mak
 +char *
 +inet45_ntoa(char *s, int len, unsigned char *addr) 
 +{
-+	char b[70], b2[70];	
++	char s2[70];	
 +	char m[2];
 +	int i = 0;
 +	int addrlen = 4;
@@ -194,7 +194,8 @@ diff --exclude autom4te.cache --exclude '*.o' --exclude 'config.*' --exclude Mak
 +		} else {
 +			strcpy(m, ".");
 +		}
-+		sprintf(s, "%s%d%s", s, (int )addr[i], m);
++		sprintf(s2, "%d%s", addr[i] & 0xFF, m);
++		strcat(s, s2);
 +	}	
 +	return s;
 +}
@@ -223,7 +224,7 @@ diff --exclude autom4te.cache --exclude '*.o' --exclude 'config.*' --exclude Mak
 +}
 diff --exclude autom4te.cache --exclude '*.o' --exclude 'config.*' --exclude Makefile --exclude 'Makefile-*' --exclude '*.orig' --exclude version.c --exclude tcpdump.1 --exclude tcpdump -rupN tcpdump/print-ip.c tcpdump-ip45/print-ip.c
 --- tcpdump/print-ip.c	2009-09-21 19:16:14.000000000 +0200
-+++ tcpdump-ip45/print-ip.c	2013-03-14 21:26:17.971299456 +0100
++++ tcpdump-ip45/print-ip.c	2013-03-14 21:26:17.000000000 +0100
 @@ -380,6 +380,19 @@ ip_print_demux(netdissect_options *ndo,
  again:
  	switch (ipds->nh) {

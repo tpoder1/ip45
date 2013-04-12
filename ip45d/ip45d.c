@@ -364,6 +364,7 @@ inline void recv6_loop(u_char *user, const struct pcap_pkthdr *h, const u_char *
 			sizeof(ip45h->daddr));
 	ip45h->ttl = htons(ntohs(ip6h->ip6_hlim) - 1);	/*  hop limit */ 
 	ip45h->tot_len = htons(ntohs(ip6h->ip6_plen) + sizeof(struct ip45hdr));
+	ip45h->dmark = 12 - (ip45_addr_begin(&ip45h->d45addr) - (void *)&ip45h->d45addr);
 //	ip45h->check1 = inet_cksum(ip45h, sizeof(struct iphdr));
 //	ip45h->check2 = inet_cksum(ip45h, sizeof(struct ip45hdr));
 

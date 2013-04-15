@@ -32,15 +32,14 @@ int rcv45_sock, snd45_sock, snd6_sock;
 int debug = 0;						/* 1 = debug mode */
 pcap_t *pcap_dev;					/* pcap device */
 uint64_t sid_hash_table[65536] = { };
-uint32_t saddr_hash_table[65536] = { };
+struct in_addr source_v4_address;
 
 void usage(void) {
 	printf("Multicast replicator version %s\n", VERSION);
 	printf("Usage:\n");
-	printf("mcrep -i <input_interface> -o <output_interface> [ -p ]  [ -s ] [ -t <ttl> ] <group> [ <group> [ ... ] ]\n");
-	printf(" -t : chage default ttl (defalt: 0 = incomming ttl - 1\n");
-	printf(" -p : generate PIM HELLO message on output interface \n");
-	printf(" -s : change source address to output interface adress \n\n");
+	printf("ip45d -4 <ip address of IPv4 interface> -6 <interface to listen IPv6 traffic>\n");
+	printf(" -4 : local IPv4 address for outgoing IP45 packets\n");
+	printf(" -6 : interface name to listen outgoing V6 packets  \n");
 	exit(1);
 }
 
@@ -81,12 +80,12 @@ u_int len;
 }
 
 /* initialize bpf and prepare it for use */
-int init_pcap(char *input_if_name) {
+int init_pcap(char *if_name) {
 	char *pcap_expr = NULL;
 	char ebuf[PCAP_ERRBUF_SIZE];
 	struct bpf_program fcode;
 
-	if ((pcap_dev = pcap_open_live(input_if_name, PKT_BUF_SIZE, 0, 100, ebuf)) == NULL) {
+	if ((pcap_dev = pcap_open_live(if_name, PKT_BUF_SIZE, 0, 100, ebuf)) == NULL) {
 		LOG("PCAP: %s\n", ebuf);
 		return 0;
 	}
@@ -96,7 +95,7 @@ int init_pcap(char *input_if_name) {
 	pcap_expr = malloc(512 + 20);
 	strcpy(pcap_expr, "ip6 and src host ::1");
 
-	DEBUG("Pcap expr: '%s'\n", pcap_expr);
+	DEBUG("Pcap expr: '%s' on %s\n", pcap_expr, if_name);
 	
 	if (pcap_compile(pcap_dev, &fcode,  pcap_expr, 1, 0) < 0) {
 		fprintf(stderr, "PCAP: %s\n", pcap_geterr(pcap_dev));
@@ -245,6 +244,8 @@ void *recv45_loop(void *t) {
 			case IPPROTO_UDP: {
 				struct udphdr *udp = (struct udphdr*)data;
 				udp->check = 0x0;
+				sport = udp->source;
+				dport = udp->dest;
 			} break;
 				
 		}
@@ -256,8 +257,8 @@ void *recv45_loop(void *t) {
 		sid_hash += inet_cksum(&sport, sizeof(sport));
 		sid_hash += inet_cksum(&dport, sizeof(dport));
 		sid_hash_table[sid_hash] = ip45h->sid;
-		saddr_hash_table[sid_hash] = ip45h->daddr;
-		printf("sid2 hash: %x, sid: %x\n", sid_hash, (unsigned long)ip45h->sid);
+//		saddr_hash_table[sid_hash] = ip45h->daddr;
+//		printf("sid2 hash: %x, sid: %x\n", sid_hash, (unsigned long)ip45h->sid);
 		
 		/* copy data to the new buffer */
 		memcpy(buf6 + sizeof(struct ip6_hdr), data, datalen);
@@ -320,13 +321,19 @@ inline void recv6_loop(u_char *user, const struct pcap_pkthdr *h, const u_char *
 		case IPPROTO_TCP: {
 			struct tcphdr *tcp = (struct tcphdr*)data;
 
+			tcp->check = 0x0;
+
 			sport = tcp->source;
 			dport = tcp->dest;
 
 		} break;
 		case IPPROTO_UDP: {
 			struct udphdr *udp = (struct udphdr*)data;
+
 			udp->check = 0x0;
+
+			sport = udp->source;
+			dport = udp->dest;
 		} break;
 				
 	}
@@ -338,15 +345,11 @@ inline void recv6_loop(u_char *user, const struct pcap_pkthdr *h, const u_char *
 	sid_hash += inet_cksum(&sport, sizeof(sport));
 	sid_hash += inet_cksum(&dport, sizeof(dport));
 	if (sid_hash_table[sid_hash] == 0) {
-//		ip45h->sid = random();	/* should be random number */
-		ip45h->sid = 0x0;
-		ip45h->saddr = 0x0;
-		printf("nosid\n");
+		ip45h->sid = random();	/* should be random number */
+		DEBUG("new sid %lx created\n", (unsigned long)ip45h->sid);
 	} else {
 		ip45h->sid = sid_hash_table[sid_hash];
-		ip45h->saddr = saddr_hash_table[sid_hash];
 	}
-	printf("sid3 hash: %x, sid: %x\n", sid_hash, (unsigned long)ip45h->sid);
 
 	/* create IP45 header */
 	memset(ip45h, 0x0, sizeof(ip45h));
@@ -355,13 +358,14 @@ inline void recv6_loop(u_char *user, const struct pcap_pkthdr *h, const u_char *
 	ip45h->protocol = IPPROTO_IP45;
 	ip45h->nexthdr = ip6h->ip6_nxt;		/* next header */
 	memset(&ip45h->s45addr, 0x0, sizeof(ip45h->d45addr));
+	ip45h->saddr = (uint32_t)source_v4_address.s_addr;
+
 	/* copy src addr to last 32bytes of src45 addr */
 	memcpy((char *)&ip45h->s45addr + sizeof(ip45h->s45addr) - sizeof(ip45h->saddr), 
 			(char *)&ip45h->saddr, sizeof(ip45h->saddr));
 	memcpy(&ip45h->d45addr, &ip6h->ip6_dst, sizeof(ip45h->d45addr)); 
 	memcpy(&ip45h->daddr, 				/* copy first non 0 32 bytes from src addr */
-			ip45_addr_begin(&ip45h->d45addr), 
-			sizeof(ip45h->daddr));
+			ip45_addr_begin(&ip45h->d45addr), sizeof(ip45h->daddr));
 	ip45h->ttl = htons(ntohs(ip6h->ip6_hlim) - 1);	/*  hop limit */ 
 	ip45h->tot_len = htons(ntohs(ip6h->ip6_plen) + sizeof(struct ip45hdr));
 	ip45h->dmark = 12 - (ip45_addr_begin(&ip45h->d45addr) - (void *)&ip45h->d45addr);
@@ -395,11 +399,23 @@ inline void recv6_loop(u_char *user, const struct pcap_pkthdr *h, const u_char *
 int main(int argc, char *argv[]) {
 
 	pthread_t recv45_thread;
+	char *v6_interface = NULL;
 	char op;
 
+	source_v4_address.s_addr = 0x0;
+
 	/* parse input parameters */
-	while ((op = getopt(argc, argv, "spdi:o:t:")) != -1) {
+	while ((op = getopt(argc, argv, "4:6:?")) != -1) {
 		switch (op) {
+			case '6': 
+					v6_interface = optarg; 
+					break;
+			case '4': 
+					if (!inet_pton(AF_INET, optarg, (void *)&source_v4_address)) {
+						LOG("Invalid IPv4 address %s\n", optarg);
+						exit(1);
+					};
+					break;
 			case '?': usage();
 		}
 	}
@@ -409,8 +425,20 @@ int main(int argc, char *argv[]) {
 		exit(2);
 	}
 
+	if (source_v4_address.s_addr == 0x0) {
+		LOG("Source address no initalised (option -4)\n");
+		exit(2);
+	} else {
+		char buf[200];
+		inet_ntop(AF_INET, &source_v4_address, (void *)&buf, 200);
+		LOG("Source IPv4 address: %s\n", buf);
+	}
+
 	init_snd_sock();
-	init_pcap("eth0");
+	if (v6_interface == NULL || !init_pcap(v6_interface)) { 
+		LOG("Cant initialize PCAP on interface %s\n", v6_interface);
+		exit(2);
+	}
 	if (pcap_loop(pcap_dev, -1, &recv6_loop, NULL) < 0) { 
 		LOG("PCAP: %s\n", pcap_geterr(pcap_dev));
 		exit(2);

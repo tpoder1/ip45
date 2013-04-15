@@ -93,7 +93,7 @@ int init_pcap(char *if_name) {
 	/* create pcap expression */
 
 	pcap_expr = malloc(512 + 20);
-	strcpy(pcap_expr, "ip6 and src host ::1");
+	strcpy(pcap_expr, "ip6 and (src host ::1 or dst net 0::/8)");
 
 	DEBUG("Pcap expr: '%s' on %s\n", pcap_expr, if_name);
 	

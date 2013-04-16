@@ -32,7 +32,7 @@
 
 int rcv45_sock, snd45_sock, snd6_sock;
 int debug = 0;						/* 1 = debug mode */
-pcap_t *pcap_dev;					/* pcap device */
+pcap_t *pcap_dev, *pcap_dev_lo;					/* pcap device */
 uint64_t sid_hash_table[65536] = { };
 struct in_addr source_v4_address;
 
@@ -92,6 +92,10 @@ int init_pcap(char *if_name) {
 		return 0;
 	}
 
+	if ((pcap_dev_lo = pcap_open_live("lo0", PKT_BUF_SIZE, 0, 100, ebuf)) == NULL) {
+		LOG("PCAP lo: %s\n", ebuf);
+		return 0;
+	}
 	/* create pcap expression */
 
 	pcap_expr = malloc(512 + 20);
@@ -159,16 +163,19 @@ void *recv45_loop(void *t) {
 		exit(1);	
 	}
 
+
 	if ((snd6_sock=socket(AF_INET6, SOCK_RAW, IPPROTO_RAW)) < 0) {   
 		perror("snd6_sock socket");
 		exit(1);
 	}
 
 
+/*
 	if (setsockopt(snd6_sock, IPPROTO_IPV6, IP_HDRINCL,(char *)&yes, sizeof(yes)) < 0 ) {
 		perror("setsockopt IP_HDRINCL (snd6_sock)");
 		exit(1);	
 	}
+*/
 
 	while ( (len = recv(rcv45_sock, buf, sizeof(buf), 0)) != 0 ) {
 
@@ -180,9 +187,10 @@ void *recv45_loop(void *t) {
 		}
 
 		/* check received len */
-		if (len != ntohs(ip45h->tot_len)) {
+		/* some platforms have updated value of tot_len in IP header */
+		if ( !(len == ip45h->tot_len || len == ip45h->tot_len + 20) ) {
 			LOG("IP45: invalid IP45 packet length (received=%u, expeted=%d)\n", 
-				(unsigned int)len, ntohs(ip45h->tot_len));
+				(unsigned int)len, ip45h->tot_len);
 			continue;
 		}
 
@@ -265,8 +273,18 @@ void *recv45_loop(void *t) {
 		/* copy data to the new buffer */
 		memcpy(buf6 + sizeof(struct ip6_hdr), data, datalen);
 
+/*
 		len = sendto(snd6_sock, buf6, datalen + sizeof(struct ip6_hdr), 0, 
 					(struct sockaddr*)&dst_addr, sizeof(dst_addr) );
+*/
+		len = pcap_inject(pcap_dev_lo, buf6, datalen + sizeof(struct ip6_hdr));
+
+		{ 
+		int i = 0;
+		for (i = 0; i < datalen; i++) {
+			printf( "%02x ", buf6[i] & 0xFF);
+		}
+		}
 		if ( len <= 0) {
 			perror("snd6 send");
 		} else {

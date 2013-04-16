@@ -27,6 +27,9 @@
 #define DEBUG(fmt, ...) printf(fmt, ##__VA_ARGS__);
 
 
+/* to have same structures on both linux and bsd systems */
+#define _BSD_SOURCE
+#define __FAVOR_BSD
 
 int rcv45_sock, snd45_sock, snd6_sock;
 int debug = 0;						/* 1 = debug mode */
@@ -224,7 +227,7 @@ void *recv45_loop(void *t) {
 				int xptr = 0;
 
 				/* an ugly way to cumpute TCP checksum - to be repaired */
-				tcp->check = 0x0;
+				tcp->th_sum = 0x0;
 				memcpy(xbuf + xptr, &ip6h->ip6_src, sizeof(ip6h->ip6_src));
 				xptr += sizeof(ip6h->ip6_src);
 				memcpy(xbuf + xptr, &ip6h->ip6_dst, sizeof(ip6h->ip6_dst));
@@ -235,17 +238,17 @@ void *recv45_loop(void *t) {
 				xptr += sizeof(ip6nxt);
 				memcpy(xbuf + xptr, data, datalen);
 				xptr += datalen;
-				tcp->check = inet_cksum(xbuf, xptr);
+				tcp->th_sum = inet_cksum(xbuf, xptr);
 
-				sport = tcp->source;
-				dport = tcp->dest;
+				sport = tcp->th_sport;
+				dport = tcp->th_dport;
 
 			} break;
 			case IPPROTO_UDP: {
 				struct udphdr *udp = (struct udphdr*)data;
-				udp->check = 0x0;
-				sport = udp->source;
-				dport = udp->dest;
+				udp->uh_sum = 0x0;
+				sport = udp->uh_sport;
+				dport = udp->uh_dport;
 			} break;
 				
 		}
@@ -321,19 +324,19 @@ inline void recv6_loop(u_char *user, const struct pcap_pkthdr *h, const u_char *
 		case IPPROTO_TCP: {
 			struct tcphdr *tcp = (struct tcphdr*)data;
 
-			tcp->check = 0x0;
+			tcp->th_sum = 0x0;
 
-			sport = tcp->source;
-			dport = tcp->dest;
+			sport = tcp->th_sport;
+			dport = tcp->th_dport;
 
 		} break;
 		case IPPROTO_UDP: {
 			struct udphdr *udp = (struct udphdr*)data;
 
-			udp->check = 0x0;
+			udp->uh_sum = 0x0;
 
-			sport = udp->source;
-			dport = udp->dest;
+			sport = udp->uh_sport;
+			dport = udp->uh_dport;
 		} break;
 				
 	}

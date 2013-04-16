@@ -1,10 +1,10 @@
 /*
-*  IP45 - Extended IP protocol 
+*  IP45 - basic structures 
 *  Tomas Podermanski, tpoder@cis.vutbr.cz 
 */
 
-#ifndef _NET_IP45_H
-#define _NET_IP45_H "2012-11-05 01"
+#ifndef _IP45_H
+#define _IP45_H "2013-04-16 01"
 #endif
 
 /* #include <linux/types.h> */
@@ -34,10 +34,10 @@ struct in45_addr
 
 /* IP45 header (standart IP header with no options + extra IP45 header */
 struct ip45hdr {
-#if defined(__LITTLE_ENDIAN__)
+#if __BYTE_ORDER == __LITTLE_ENDIAN
 	uint8_t	sver:4,					/* sub version, always set to 5 */
 		mver:4;					/* major version, always set to 4 */
-#elif defined (__BIG_ENDIAN__)
+#elif __BYTE_ORDER == __BIG_ENDIAN
 	uint8_t	mver:4,
  		sver:4;	
 #else
@@ -54,12 +54,14 @@ struct ip45hdr {
 	uint32_t	daddr;
 	/* extended header for IP4.5 is presented here */
 	uint8_t	nexthdr;
-#if defined(__LITTLE_ENDIAN__)
+#if __BYTE_ORDER == __LITTLE_ENDIAN
 	uint8_t	flags:4,
 			dmark:4;
-#elif defined (__BIG_ENDIAN__)
+#elif __BYTE_ORDER == __BIG_ENDIAN
 	uint8_t	dmark:4,
 	  		flags:4;				
+#else
+#error	"Byte order not detected"
 #endif
 	uint16_t	check2;
 	struct in45_addr	s45addr;

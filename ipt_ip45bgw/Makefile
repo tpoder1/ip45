@@ -11,6 +11,7 @@
 obj-m := ipt_ip45bgw.o
 
 KVERSION := $(shell uname -r)
+PLATFORM := $(shell uname -m)
 KPATH := /lib/modules/$(KVERSION)/build
 
 #ARCH=mip

@@ -7,38 +7,12 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <arpa/inet.h>
-
-
-#define IPTABLES_VERSION_CMP(a,b,c) (((a) << 16) + ((b) << 8) + (c))
-
-#if IPTABLES_VERSION_CODE < IPTABLES_VERSION_CMP(1,4,0)
-#  include <iptables.h>
-#  define xt_entry_target ipt_entry_target
-#  define void_entry struct ipt_entry
-#  define void_ip struct ipt_ip
-#else
-#  include <xtables.h>
-#  define void_entry void
-#  define void_ip void
-#endif
-
-#if IPTABLES_VERSION_CODE < IPTABLES_VERSION_CMP(1,4,1)
-#  define xtables_target iptables_target
-#  define XTABLES_VERSION IPTABLES_VERSION
-#  define xtables_register_target register_target
-#endif
-
-#if IPTABLES_VERSION_CODE < IPTABLES_VERSION_CMP(1,4,3)
-#  define xtables_error exit_error
-#  define  xtables_check_inverse check_inverse
-#  define NFPROTO_IPV PF_INET
-#endif
-
-#ifndef XT_ALIGN
-#  define XT_ALIGN IPT_ALIGN
-#endif
-
+#include <xtables.h>
 #include "ipt_ip45bgw.h"
+
+
+#define void_entry void
+#define void_ip void
 
 static void ip45bgw_help(void)
 {
@@ -72,11 +46,7 @@ static int ip45bgw_parse(
 			if (!optarg) {
 				xtables_error(PARAMETER_PROBLEM, "--" IPT_IP45_UPSTREAM ": You must specify a value");
 			}
-			if (xtables_check_inverse(optarg, &invert, NULL, 0
-#if IPTABLES_VERSION_CODE >= IPTABLES_VERSION_CMP(1,4,6)
-				,argv
-#endif
-			)) {
+			if (xtables_check_inverse(optarg, &invert, NULL, 0 ,argv)) {
 				xtables_error(PARAMETER_PROBLEM, "Unexpected `!' after --" IPT_IP45_UPSTREAM);
 			}
 
@@ -96,11 +66,7 @@ static int ip45bgw_parse(
 			if (!optarg) {
 				xtables_error(PARAMETER_PROBLEM, "--" IPT_IP45_DOWNSTREAM ": You must specify a value");
 			}
-			if (xtables_check_inverse(optarg, &invert, NULL, 0
-#if IPTABLES_VERSION_CODE >= IPTABLES_VERSION_CMP(1,4,6)
-				,argv
-#endif
-			)) {
+			if (xtables_check_inverse(optarg, &invert, NULL, 0 ,argv)) {
 				xtables_error(PARAMETER_PROBLEM, "Unexpected `!' after --" IPT_IP45_DOWNSTREAM);
 			}
 
@@ -172,9 +138,7 @@ static struct option ip45bgw_opts[] = {
 static struct xtables_target ip45bgw_tg_reg = {
 	.name 		= "ip45bgw",
 	.version	= XTABLES_VERSION,
-#if IPTABLES_VERSION_CODE >= IPTABLES_VERSION_CMP(1,4,1)
 	.family		= NFPROTO_IPV4,
-#endif
 	.size		= XT_ALIGN(sizeof(struct ipt_ip45bgw_info)),
 	.userspacesize	= XT_ALIGN(sizeof(struct ipt_ip45bgw_info)),
 	.help		= ip45bgw_help,

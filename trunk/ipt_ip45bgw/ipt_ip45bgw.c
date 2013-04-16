@@ -53,12 +53,13 @@ static void ip45bgw_log(
 
 }
 
-static unsigned int ip45bgw_tg(
-	struct sk_buff *skb,
-	const struct xt_target_param *par)
-{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,0,0)
+static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_action_param *par) {
+#else
+static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param *par) {
+#endif
 	struct ip45hdr *ip45h = (struct ip45hdr *)ip_hdr(skb);
-	const struct ipt_ip45bgw_info *info = par->targinfo;
+	const struct ipt_ip45bgw_info *info = (struct ipt_ip45bgw_info *)par->targinfo;
 	u_int32_t downstream, upstream;
 	int shlen = (32 - info->downstream_len) / 8; /* number of octets to shift */
 	int log = IPT_IP45_OPT_LOG & info->ip45flags;
@@ -122,9 +123,7 @@ static unsigned int ip45bgw_tg(
 	return XT_CONTINUE;
 }
 
-static bool ip45bgw_tg_check(
-	const struct xt_tgchk_param *par)
-{
+static bool ip45bgw_tg_check(const struct xt_tgchk_param *par) {
 	const struct ipt_ip45bgw_info *info = par->targinfo;
 
 	if ( (IPT_IP45_OPT_DOWNSTREAM & info->ip45flags) == 0 || (IPT_IP45_OPT_UPSTREAM & info->ip45flags) == 0 ) {
@@ -137,7 +136,7 @@ static bool ip45bgw_tg_check(
 static struct xt_target ip45bgw_tg_reg __read_mostly = {
 	.name 		= "ip45bgw",
 	.target 	= ip45bgw_tg,
-	.checkentry	= ip45bgw_tg_check,
+	.checkentry	= (void *)ip45bgw_tg_check,
 	.destroy	= NULL,
 	.family		= NFPROTO_IPV4,
 	.targetsize	= sizeof(struct ipt_ip45bgw_info),

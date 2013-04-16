@@ -10,6 +10,7 @@
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/ip6.h>
+#define __FAVOR_BSD 
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
 #include <netinet/if_ether.h>
@@ -28,8 +29,6 @@
 
 
 /* to have same structures on both linux and bsd systems */
-#define _BSD_SOURCE
-#define __FAVOR_BSD
 
 int rcv45_sock, snd45_sock, snd6_sock;
 int debug = 0;						/* 1 = debug mode */

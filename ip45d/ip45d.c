@@ -141,7 +141,7 @@ void *recv45_loop(void *t) {
 	char buf6[PKT_BUF_SIZE];
 	struct ip45hdr *ip45h;
 	struct ip6_hdr *ip6h;
-	char *data;
+	char *sdata, *ddata;
 	char saddr[IP45_ADDR_LEN];
 	char daddr[IP45_ADDR_LEN];
 	ssize_t len;
@@ -205,8 +205,14 @@ void *recv45_loop(void *t) {
 
 		/* prepare IPv6 packet */
 		memset(buf6, 0, sizeof(buf6));
-		ip6h = (struct ip6_hdr *)buf6;
-		data = buf + sizeof(struct ip45hdr);
+
+		ddata = buf6;
+		/* pcap null header */
+		*ddata = (uint32_t *)AF_INET6;
+		ddata += sizeof(uint32_t);
+
+		ip6h = (struct ip6_hdr *)ddata;
+		sdata = buf + sizeof(struct ip45hdr);
 		datalen = len - sizeof(struct ip45hdr);
 		
 //		ip6h->ip6_vfc = htons(0x60); /* 4 bits version, 4 bits priority */
@@ -218,6 +224,7 @@ void *recv45_loop(void *t) {
 		ip6h->ip6_dst.s6_addr[15] = 1;
 
 		/* prepare dst addr */
+
 		memset(&dst_addr, 0, sizeof(dst_addr));
 		dst_addr.sin6_family = AF_INET6;
 		memcpy(&dst_addr.sin6_addr, &ip6h->ip6_dst, sizeof(dst_addr.sin6_addr));
@@ -227,7 +234,7 @@ void *recv45_loop(void *t) {
 		switch (ip6h->ip6_nxt) {
 			case IPPROTO_TCP: {
 
-				struct tcphdr *tcp = (struct tcphdr*)data;
+				struct tcphdr *tcp = (struct tcphdr*)sdata;
 				uint32_t ip6nxt = htonl(ip6h->ip6_nxt);
 				uint32_t tcp_len = htonl(datalen);
 				char xbuf[PKT_BUF_SIZE];
@@ -243,7 +250,7 @@ void *recv45_loop(void *t) {
 				xptr += sizeof(u_int32_t);
 				memcpy(xbuf + xptr, &ip6nxt, sizeof(ip6nxt));
 				xptr += sizeof(ip6nxt);
-				memcpy(xbuf + xptr, data, datalen);
+				memcpy(xbuf + xptr, sdata, datalen);
 				xptr += datalen;
 				tcp->th_sum = inet_cksum(xbuf, xptr);
 
@@ -252,7 +259,7 @@ void *recv45_loop(void *t) {
 
 			} break;
 			case IPPROTO_UDP: {
-				struct udphdr *udp = (struct udphdr*)data;
+				struct udphdr *udp = (struct udphdr*)sdata;
 				udp->uh_sum = 0x0;
 				sport = udp->uh_sport;
 				dport = udp->uh_dport;
@@ -271,20 +278,14 @@ void *recv45_loop(void *t) {
 //		printf("sid2 hash: %x, sid: %x\n", sid_hash, (unsigned long)ip45h->sid);
 		
 		/* copy data to the new buffer */
-		memcpy(buf6 + sizeof(struct ip6_hdr), data, datalen);
+		memcpy(ddata + sizeof(struct ip6_hdr), sdata, datalen);
 
 /*
 		len = sendto(snd6_sock, buf6, datalen + sizeof(struct ip6_hdr), 0, 
 					(struct sockaddr*)&dst_addr, sizeof(dst_addr) );
 */
-		len = pcap_inject(pcap_dev_lo, buf6, datalen + sizeof(struct ip6_hdr));
+		len = pcap_inject(pcap_dev_lo, buf6, datalen + sizeof(struct ip6_hdr) + sizeof(uint32_t));
 
-		{ 
-		int i = 0;
-		for (i = 0; i < datalen; i++) {
-			printf( "%02x ", buf6[i] & 0xFF);
-		}
-		}
 		if ( len <= 0) {
 			perror("snd6 send");
 		} else {
@@ -304,6 +305,7 @@ void *recv45_loop(void *t) {
 inline void recv6_loop(u_char *user, const struct pcap_pkthdr *h, const u_char *p) {
 
 	struct ether_header *ethh = (struct ether_header *)p;
+	uint32_t *nullh = (uint32_t *)p;
 	struct ip6_hdr *ip6h = (void *)(p + sizeof(struct ether_header));
 	char buf[PKT_BUF_SIZE];
 	char *data;
@@ -312,17 +314,36 @@ inline void recv6_loop(u_char *user, const struct pcap_pkthdr *h, const u_char *
 	char saddr[IP45_ADDR_LEN];
 	char daddr[IP45_ADDR_LEN];
 	ssize_t len;
+	int caplen = h->caplen;
 	struct sockaddr_in dst_addr;
 	uint16_t sid_hash = 0;
 	uint16_t sport = 0;
 	uint16_t dport = 0;
 
-	/* we forward only IP datagrams */
-	if (ntohs(ethh->ether_type) != ETHERTYPE_IPV6) {
-		return;
+	switch (pcap_datalink(pcap_dev)) {
+		case DLT_NULL:
+			if (*nullh != AF_INET6) {
+				LOG("No IPv6 packet (lo)\n");
+				return;
+			}
+			ip6h = (void *)(p + sizeof(uint32_t));
+			caplen -= sizeof(uint32_t);
+			break;
+		case DLT_EN10MB: 
+			ip6h = (void *)(p + sizeof(struct ether_header));
+			caplen -= sizeof(struct ether_header);
+			if (ntohs(ethh->ether_type) != ETHERTYPE_IPV6) {
+				LOG("No IPv6 packet (eth)\n");
+				return;
+			}
+			break;
+		default:
+			LOG("Unsupported device (type=%x)\n", pcap_datalink(pcap_dev));
+			break;
 	}
 
-	if (h->caplen - sizeof(struct ether_header) - sizeof(struct ip6_hdr) != ntohs(ip6h->ip6_plen)) {
+
+	if (caplen - sizeof(struct ip6_hdr) != ntohs(ip6h->ip6_plen)) {
 		LOG("Invalid packet size \n");
 		return;
 	}
@@ -387,8 +408,12 @@ inline void recv6_loop(u_char *user, const struct pcap_pkthdr *h, const u_char *
 	memcpy(&ip45h->daddr, 				/* copy first non 0 32 bytes from src addr */
 			ip45_addr_begin(&ip45h->d45addr), sizeof(ip45h->daddr));
 	ip45h->ttl = htons(ntohs(ip6h->ip6_hlim) - 1);	/*  hop limit */ 
-	ip45h->tot_len = htons(ntohs(ip6h->ip6_plen) + sizeof(struct ip45hdr));
+	//ip45h->tot_len = htons(ntohs(ip6h->ip6_plen) + sizeof(struct ip45hdr));
+
+	/* BSD requires it in host order */
+	ip45h->tot_len = ntohs(ip6h->ip6_plen) + sizeof(struct ip45hdr);
 	ip45h->dmark = 12 - (ip45_addr_begin(&ip45h->d45addr) - (void *)&ip45h->d45addr);
+//	ip45h->check1 = inet_cksum(ip45h, 5);
 //	ip45h->check1 = inet_cksum(ip45h, sizeof(struct iphdr));
 //	ip45h->check2 = inet_cksum(ip45h, sizeof(struct ip45hdr));
 
@@ -401,7 +426,7 @@ inline void recv6_loop(u_char *user, const struct pcap_pkthdr *h, const u_char *
 	/* copy data to the new buffer */
 	memcpy(buf + sizeof(struct ip45hdr), data, ntohs(ip6h->ip6_plen));
 
-	len = sendto(snd45_sock, buf, ntohs(ip45h->tot_len), 0, 
+	len = sendto(snd45_sock, buf, ip45h->tot_len, 0, 
 				(struct sockaddr*)&dst_addr, sizeof(dst_addr) );
 	if (len <= 0 ) {
 		perror("snd45 send");

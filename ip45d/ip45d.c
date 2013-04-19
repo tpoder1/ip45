@@ -30,9 +30,9 @@
 
 /* to have same structures on both linux and bsd systems */
 
-int rcv45_sock, snd45_sock, snd6_sock;
+int rcv45_sock, snd45_sock;
 int debug = 0;						/* 1 = debug mode */
-pcap_t *pcap_dev, *pcap_dev_lo;					/* pcap device */
+pcap_t *pcap_dev, *pcap_dev_snd;	/* pcap device */
 uint64_t sid_hash_table[65536] = { };
 struct in_addr source_v4_address;
 
@@ -81,6 +81,206 @@ u_int len;
     return (answer);
 }
 
+
+/* process IP45 packet and prepare it as IPv6 packet*/
+/* !1 - we expect that ipv6 buffer is big enough to handle data */
+ssize_t ip45_to_ipv6(char *ip45pkt, ssize_t len45, char *ip6pkt) {
+
+	struct ip45hdr *ip45h = (struct ip45hdr *)ip45pkt;
+	struct ip6_hdr *ip6h = (struct ip6_hdr *)ip6pkt;
+	char *ip45data = ip45pkt + sizeof(struct ip45hdr);
+	char *ip6data = ip6pkt + sizeof(struct ip6_hdr);
+	ssize_t datalen;
+	uint16_t sport = 0;
+	uint16_t dport = 0;
+	uint16_t sid_hash = 0;
+
+
+	/* check version */
+	if (ip45h->mver != 4 || ip45h->sver != 5 || ip45h->protocol != IPPROTO_IP45) {
+		DEBUG("IP45: invalid IP45 packet mver, sver or ptotcol\n");
+		return -1;
+	}
+
+	/* check received len */
+#ifdef __APPLE__
+	/* some platforms have update value of tot_len in IP header */
+	/* and decrases the number of byted of IP header size */	
+	/* we have to ajust the value here */
+	ip45h->tot_len += 20;
+	ip45h->tot_len = ntohs(ip45h->tot_len);
+#endif
+
+	if ( len45 != htons(ip45h->tot_len) ) {
+		DEBUG("IP45: invalid IP45 packet length\n");
+		return -1;
+	}
+	datalen = len45 - sizeof(struct ip45hdr);
+
+	/* prepare IPv6 packet */
+	memset(ip6h, 0, sizeof(ip6h));
+
+//	ip6h->ip6_vfc = htons(0x60); /* 4 bits version, 4 bits priority */
+	ip6h->ip6_flow = htonl ((6 << 28) | (0 << 20) | 0); /* 4 bits version, 4 bits priority */
+	ip6h->ip6_plen = htons(datalen);	/* payload length */
+	ip6h->ip6_nxt = ip45h->nexthdr;		/* next header */
+	ip6h->ip6_hlim = htons(ntohs(ip45h->ttl) - 1);	/*  hop limit */ 
+
+	/* src, dst address */
+	memcpy(&ip6h->ip6_src, &ip45h->s45addr, sizeof(ip6h->ip6_src)); 
+	ip6h->ip6_dst.s6_addr[15] = 1;
+
+	/* copy data to the new buffer */
+	memcpy(ip6data, ip45data, len45 - sizeof(struct ip45hdr));
+
+	/* update checksum */
+	switch (ip6h->ip6_nxt) {
+		case IPPROTO_TCP: {
+
+			struct tcphdr *tcp = (struct tcphdr*)ip6data;
+			char xbuf[PKT_BUF_SIZE];
+			int xptr = 0;
+			uint32_t ip6nxt = htonl(ip6h->ip6_nxt);
+			uint32_t tcp_len = htonl(datalen);
+			
+
+			/* an ugly way to cumpute TCP checksum - to be repaired */
+			tcp->th_sum = 0x0;
+			memcpy(xbuf + xptr, &ip6h->ip6_src, sizeof(ip6h->ip6_src));
+			xptr += sizeof(ip6h->ip6_src);
+			memcpy(xbuf + xptr, &ip6h->ip6_dst, sizeof(ip6h->ip6_dst));
+			xptr += sizeof(ip6h->ip6_dst);
+			memcpy(xbuf + xptr, &tcp_len, sizeof(u_int32_t));
+			xptr += sizeof(u_int32_t);
+			memcpy(xbuf + xptr, &ip6nxt, sizeof(ip6nxt));
+			xptr += sizeof(ip6nxt);
+			memcpy(xbuf + xptr, ip6data, datalen);
+			xptr += datalen;
+			tcp->th_sum = inet_cksum(xbuf, xptr);
+
+			sport = tcp->th_sport;
+			dport = tcp->th_dport;
+
+		} break;
+		case IPPROTO_UDP: {
+			struct udphdr *udp = (struct udphdr*)ip6data;
+			udp->uh_sum = 0x0;
+			sport = udp->uh_sport;
+			dport = udp->uh_dport;
+		} break;
+				
+	}
+
+	/* store the sit into hash table */
+	sid_hash = 0;
+	sid_hash += inet_cksum(&ip45h->s45addr, sizeof(ip45h->s45addr));
+	sid_hash += inet_cksum(&ip45h->nexthdr, sizeof(ip45h->nexthdr));
+	sid_hash += inet_cksum(&sport, sizeof(sport));
+	sid_hash += inet_cksum(&dport, sizeof(dport));
+	sid_hash_table[sid_hash] = ip45h->sid;
+
+	return datalen + sizeof(struct ip6_hdr);
+}
+
+/* process IPv6 packet and prepare it as IP45 packet*/
+/* !1 - we expect that ipv6 buffer is big enough to handle data */
+ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt) {
+	struct ip45hdr *ip45h = (struct ip45hdr *)ip45pkt;
+	struct ip6_hdr *ip6h = (struct ip6_hdr *)ip6pkt;
+	char *ip45data = ip45pkt + sizeof(struct ip45hdr);
+	char *ip6data = ip6pkt + sizeof(struct ip6_hdr);
+	ssize_t datalen;
+	uint16_t sport = 0;
+	uint16_t dport = 0;
+	uint16_t sid_hash = 0;
+	static const unsigned char localhost_bytes[] =
+		{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 };
+
+
+	if (len6 - sizeof(struct ip6_hdr) != ntohs(ip6h->ip6_plen)) {
+		DEBUG("Invalid IPv6 packet size \n");
+		return -1;
+	}
+	datalen = len6 - sizeof(struct ip6_hdr);
+
+	/* source address have to be loopback */
+	if( ! memcmp(&ip6h->ip6_src, &localhost_bytes, sizeof(ip6h->ip6_src)) == 0 ) {
+		DEBUG("Not loopback src \n");
+		return -1;
+	}
+
+
+	/* update checksum */
+	switch (ip6h->ip6_nxt) {
+		case IPPROTO_TCP: {
+			struct tcphdr *tcp = (struct tcphdr*)ip6data;
+
+			tcp->th_sum = 0x0;
+
+			sport = tcp->th_sport;
+			dport = tcp->th_dport;
+
+		} break;
+		case IPPROTO_UDP: {
+			struct udphdr *udp = (struct udphdr*)ip6data;
+
+			udp->uh_sum = 0x0;
+
+			sport = udp->uh_sport;
+			dport = udp->uh_dport;
+		} break;
+				
+	}
+
+	/* create IP45 header */
+	memset(ip45h, 0x0, sizeof(struct ip45hdr));
+
+	/* find the sid into hash table  */
+	sid_hash = 0;
+	sid_hash += inet_cksum(&ip6h->ip6_dst, sizeof(ip6h->ip6_dst));
+	sid_hash += inet_cksum(&ip6h->ip6_nxt, sizeof(ip6h->ip6_nxt));
+	sid_hash += inet_cksum(&sport, sizeof(sport));
+	sid_hash += inet_cksum(&dport, sizeof(dport));
+	if (sid_hash_table[sid_hash] == 0) {
+		ip45h->sid = random();	/* should be random number */
+		DEBUG("new sid %lx created\n", (unsigned long)ip45h->sid);
+	} else {
+		ip45h->sid = sid_hash_table[sid_hash];
+	}
+
+	ip45h->mver = 4;
+	ip45h->sver = 5;
+	ip45h->protocol = IPPROTO_IP45;
+	ip45h->nexthdr = ip6h->ip6_nxt;		/* next header */
+//	memset(&ip45h->s45addr, 0x0, sizeof(ip45h->d45addr));
+	ip45h->saddr = (uint32_t)source_v4_address.s_addr;
+
+	/* copy src addr to last 32bytes of src45 addr */
+	memcpy((char *)&ip45h->s45addr + sizeof(ip45h->s45addr) - sizeof(ip45h->saddr), 
+			(char *)&ip45h->saddr, sizeof(ip45h->saddr));
+	memcpy(&ip45h->d45addr, &ip6h->ip6_dst, sizeof(ip45h->d45addr)); 
+	memcpy(&ip45h->daddr, 				/* copy first non 0 32 bytes from src addr */
+			ip45_addr_begin(&ip45h->d45addr), sizeof(ip45h->daddr));
+	ip45h->ttl = htons(ntohs(ip6h->ip6_hlim) - 1);	/*  hop limit */ 
+
+
+	ip45h->tot_len = ntohs(datalen + sizeof(struct ip45hdr));
+#ifdef __APPLE__
+	/* BSD requires it in host order Linux not */
+	ip45h->tot_len = htons(ip45h->tot_len);
+#endif
+	ip45h->dmark = 12 - (ip45_addr_begin(&ip45h->d45addr) - (void *)&ip45h->d45addr);
+//	ip45h->check1 = inet_cksum(ip45h, 5);
+//	ip45h->check1 = inet_cksum(ip45h, sizeof(struct iphdr));
+//	ip45h->check2 = inet_cksum(ip45h, sizeof(struct ip45hdr));
+
+	/* copy data to the new buffer */
+	memcpy(ip45data, ip6data, datalen);
+
+	return datalen + sizeof(struct ip45hdr);
+}
+
+
 /* initialize bpf and prepare it for use */
 int init_pcap(char *if_name) {
 	char *pcap_expr = NULL;
@@ -92,8 +292,8 @@ int init_pcap(char *if_name) {
 		return 0;
 	}
 
-	if ((pcap_dev_lo = pcap_open_live("lo0", PKT_BUF_SIZE, 0, 100, ebuf)) == NULL) {
-		LOG("PCAP lo: %s\n", ebuf);
+	if ((pcap_dev_snd = pcap_open_live("lo", PKT_BUF_SIZE, 0, 100, ebuf)) == NULL) {
+		LOG("PCAP snd: %s\n", ebuf);
 		return 0;
 	}
 	/* create pcap expression */
@@ -137,19 +337,16 @@ int init_snd_sock() {
 void *recv45_loop(void *t) {
 
 	int rcv45_sock;
-	char buf[PKT_BUF_SIZE];
-	char buf6[PKT_BUF_SIZE];
+	char buf45[PKT_BUF_SIZE];
+	char lbuf6[PKT_BUF_SIZE];
+	char *buf6;
 	struct ip45hdr *ip45h;
 	struct ip6_hdr *ip6h;
-	char *sdata, *ddata;
 	char saddr[IP45_ADDR_LEN];
 	char daddr[IP45_ADDR_LEN];
-	ssize_t len;
-	size_t datalen;
-	struct sockaddr_in6 dst_addr;
-	uint16_t sid_hash = 0;		/* hash - the key to teh sid hash table */
-	uint16_t sport = 0;
-	uint16_t dport = 0;
+	ssize_t len45, len6;
+	size_t linkhdr;
+//	struct sockaddr_in6 dst_addr;
 
 	u_int yes = 1;
 
@@ -163,12 +360,12 @@ void *recv45_loop(void *t) {
 		exit(1);	
 	}
 
-
+/*
 	if ((snd6_sock=socket(AF_INET6, SOCK_RAW, IPPROTO_RAW)) < 0) {   
 		perror("snd6_sock socket");
 		exit(1);
 	}
-
+*/
 
 /*
 	if (setsockopt(snd6_sock, IPPROTO_IPV6, IP_HDRINCL,(char *)&yes, sizeof(yes)) < 0 ) {
@@ -176,25 +373,39 @@ void *recv45_loop(void *t) {
 		exit(1);	
 	}
 */
+	memset(lbuf6, 0, PKT_BUF_SIZE);
 
-	while ( (len = recv(rcv45_sock, buf, sizeof(buf), 0)) != 0 ) {
+	switch (pcap_datalink(pcap_dev)) {
+		case DLT_NULL:
+			linkhdr = sizeof(uint32_t);
+			/* pcap null header */
+			*lbuf6 = (uint32_t *)AF_INET6;
+			linkhdr = sizeof(uint32_t);
+			break;
+		case DLT_EN10MB: {
+			struct ether_header *ethh = (struct ether_header *)lbuf6;
+			ethh->ether_type = htons(ETHERTYPE_IPV6);
+			linkhdr = sizeof(struct ether_header);
+			break;
+			}
+		default:
+			LOG("Unsupported device (type=%x)\n", pcap_datalink(pcap_dev));
+			exit(2);
+	}
 
-		ip45h = (struct ip45hdr*)buf;
+	buf6 = lbuf6 + linkhdr;
 
-		if (ip45h->mver != 4 || ip45h->sver != 5 || ip45h->protocol != IPPROTO_IP45) {
-			LOG("IP45: invalid IP45 packet\n");
-			continue;
-		}
+	while ( (len45 = recv(rcv45_sock, buf45, sizeof(buf45), 0)) != 0 ) {
 
-		/* check received len */
-		/* some platforms have updated value of tot_len in IP header */
-		if ( !(len == ip45h->tot_len || len == ip45h->tot_len + 20) ) {
-			LOG("IP45: invalid IP45 packet length (received=%u, expeted=%d)\n", 
-				(unsigned int)len, ip45h->tot_len);
+		len6 = ip45_to_ipv6(buf45, len45, buf6);
+
+		if (len6 <= 0 ) {
+			LOG("Invalid IP45 packet\n");
 			continue;
 		}
 
 		/* valid IP45 packet */
+		ip45h = (struct ip45h *)buf45;
 		inet_ntop45((char *)&ip45h->s45addr, saddr, IP45_ADDR_LEN);
 		inet_ntop45((char *)&ip45h->d45addr, daddr, IP45_ADDR_LEN);
 		
@@ -203,122 +414,36 @@ void *recv45_loop(void *t) {
 			(unsigned long)ip45h->sid, ip45h->nexthdr);
 
 
-		/* prepare IPv6 packet */
-		memset(buf6, 0, sizeof(buf6));
+		len6 = pcap_inject(pcap_dev_snd, lbuf6, len6 + linkhdr);
 
-		ddata = buf6;
-		/* pcap null header */
-		*ddata = (uint32_t *)AF_INET6;
-		ddata += sizeof(uint32_t);
-
-		ip6h = (struct ip6_hdr *)ddata;
-		sdata = buf + sizeof(struct ip45hdr);
-		datalen = len - sizeof(struct ip45hdr);
-		
-//		ip6h->ip6_vfc = htons(0x60); /* 4 bits version, 4 bits priority */
-		ip6h->ip6_flow = htonl ((6 << 28) | (0 << 20) | 0); /* 4 bits version, 4 bits priority */
-		ip6h->ip6_plen = htons(datalen);	/* payload length */
-		ip6h->ip6_nxt = ip45h->nexthdr;		/* next header */
-		ip6h->ip6_hlim = htons(ntohs(ip45h->ttl) - 1);	/*  hop limit */ 
-		memcpy(&ip6h->ip6_src, &ip45h->s45addr, sizeof(ip6h->ip6_src)); 
-		ip6h->ip6_dst.s6_addr[15] = 1;
-
-		/* prepare dst addr */
-
-		memset(&dst_addr, 0, sizeof(dst_addr));
-		dst_addr.sin6_family = AF_INET6;
-		memcpy(&dst_addr.sin6_addr, &ip6h->ip6_dst, sizeof(dst_addr.sin6_addr));
-		dst_addr.sin6_port = htons(0);
-
-		/* update checksum */
-		switch (ip6h->ip6_nxt) {
-			case IPPROTO_TCP: {
-
-				struct tcphdr *tcp = (struct tcphdr*)sdata;
-				uint32_t ip6nxt = htonl(ip6h->ip6_nxt);
-				uint32_t tcp_len = htonl(datalen);
-				char xbuf[PKT_BUF_SIZE];
-				int xptr = 0;
-
-				/* an ugly way to cumpute TCP checksum - to be repaired */
-				tcp->th_sum = 0x0;
-				memcpy(xbuf + xptr, &ip6h->ip6_src, sizeof(ip6h->ip6_src));
-				xptr += sizeof(ip6h->ip6_src);
-				memcpy(xbuf + xptr, &ip6h->ip6_dst, sizeof(ip6h->ip6_dst));
-				xptr += sizeof(ip6h->ip6_dst);
-				memcpy(xbuf + xptr, &tcp_len, sizeof(u_int32_t));
-				xptr += sizeof(u_int32_t);
-				memcpy(xbuf + xptr, &ip6nxt, sizeof(ip6nxt));
-				xptr += sizeof(ip6nxt);
-				memcpy(xbuf + xptr, sdata, datalen);
-				xptr += datalen;
-				tcp->th_sum = inet_cksum(xbuf, xptr);
-
-				sport = tcp->th_sport;
-				dport = tcp->th_dport;
-
-			} break;
-			case IPPROTO_UDP: {
-				struct udphdr *udp = (struct udphdr*)sdata;
-				udp->uh_sum = 0x0;
-				sport = udp->uh_sport;
-				dport = udp->uh_dport;
-			} break;
-				
-		}
-
-		/* store the sit into hash table */
-		sid_hash = 0;
-		sid_hash += inet_cksum(&ip45h->s45addr, sizeof(ip45h->s45addr));
-		sid_hash += inet_cksum(&ip45h->nexthdr, sizeof(ip45h->nexthdr));
-		sid_hash += inet_cksum(&sport, sizeof(sport));
-		sid_hash += inet_cksum(&dport, sizeof(dport));
-		sid_hash_table[sid_hash] = ip45h->sid;
-//		saddr_hash_table[sid_hash] = ip45h->daddr;
-//		printf("sid2 hash: %x, sid: %x\n", sid_hash, (unsigned long)ip45h->sid);
-		
-		/* copy data to the new buffer */
-		memcpy(ddata + sizeof(struct ip6_hdr), sdata, datalen);
-
-/*
-		len = sendto(snd6_sock, buf6, datalen + sizeof(struct ip6_hdr), 0, 
-					(struct sockaddr*)&dst_addr, sizeof(dst_addr) );
-*/
-		len = pcap_inject(pcap_dev_lo, buf6, datalen + sizeof(struct ip6_hdr) + sizeof(uint32_t));
-
-		if ( len <= 0) {
+		if ( len6 <= 0) {
 			perror("snd6 send");
 		} else {
+			ip6h = buf6;
 			inet_ntop(AF_INET6, (char *)&ip6h->ip6_src, saddr, IP45_ADDR_LEN);
 			inet_ntop(AF_INET6, (char *)&ip6h->ip6_dst, daddr, IP45_ADDR_LEN);
 			DEBUG("Send IPv6 packet %s -> %s, proto=%d, bytes=%d\n\n", 
 				saddr, daddr,
-				ip6h->ip6_nxt, (unsigned int)datalen);
+				ip6h->ip6_nxt, (unsigned int)len6);
 		}
 	}
 
 	return NULL;
 }
 
-
 /* process IP6 packet and send as IP45 */
 inline void recv6_loop(u_char *user, const struct pcap_pkthdr *h, const u_char *p) {
 
 	struct ether_header *ethh = (struct ether_header *)p;
 	uint32_t *nullh = (uint32_t *)p;
-	struct ip6_hdr *ip6h = (void *)(p + sizeof(struct ether_header));
-	char buf[PKT_BUF_SIZE];
-	char *data;
-	//char buf6[PKT_BUF_SIZE];
-	struct ip45hdr *ip45h = (struct ip45hdr *)buf;
+	char buf45[PKT_BUF_SIZE];
+	struct ip6_hdr *ip6h;
+	struct ip45hdr *ip45h = (struct ip45hdr *)buf45;
 	char saddr[IP45_ADDR_LEN];
 	char daddr[IP45_ADDR_LEN];
-	ssize_t len;
+	ssize_t len45;
 	int caplen = h->caplen;
 	struct sockaddr_in dst_addr;
-	uint16_t sid_hash = 0;
-	uint16_t sport = 0;
-	uint16_t dport = 0;
 
 	switch (pcap_datalink(pcap_dev)) {
 		case DLT_NULL:
@@ -339,14 +464,13 @@ inline void recv6_loop(u_char *user, const struct pcap_pkthdr *h, const u_char *
 			break;
 		default:
 			LOG("Unsupported device (type=%x)\n", pcap_datalink(pcap_dev));
+			return;
 			break;
 	}
 
 
-	if (caplen - sizeof(struct ip6_hdr) != ntohs(ip6h->ip6_plen)) {
-		LOG("Invalid packet size \n");
-		return;
-	}
+	len45 = ipv6_to_ip45((void *)ip6h, caplen, buf45);
+	
 
 	inet_ntop(AF_INET6, (char *)&ip6h->ip6_src, saddr, IP45_ADDR_LEN);
 	inet_ntop(AF_INET6, (char *)&ip6h->ip6_dst, daddr, IP45_ADDR_LEN);
@@ -354,81 +478,18 @@ inline void recv6_loop(u_char *user, const struct pcap_pkthdr *h, const u_char *
 			saddr, daddr,
 			ip6h->ip6_nxt, h->caplen);
 
-	data = (char *)ip6h + sizeof(struct ip6_hdr);
-
-
-	/* update checksum */
-	switch (ip6h->ip6_nxt) {
-		case IPPROTO_TCP: {
-			struct tcphdr *tcp = (struct tcphdr*)data;
-
-			tcp->th_sum = 0x0;
-
-			sport = tcp->th_sport;
-			dport = tcp->th_dport;
-
-		} break;
-		case IPPROTO_UDP: {
-			struct udphdr *udp = (struct udphdr*)data;
-
-			udp->uh_sum = 0x0;
-
-			sport = udp->uh_sport;
-			dport = udp->uh_dport;
-		} break;
-				
-	}
-
-	/* find the sid into hash table  */
-	sid_hash = 0;
-	sid_hash += inet_cksum(&ip6h->ip6_dst, sizeof(ip6h->ip6_dst));
-	sid_hash += inet_cksum(&ip6h->ip6_nxt, sizeof(ip6h->ip6_nxt));
-	sid_hash += inet_cksum(&sport, sizeof(sport));
-	sid_hash += inet_cksum(&dport, sizeof(dport));
-	if (sid_hash_table[sid_hash] == 0) {
-		ip45h->sid = random();	/* should be random number */
-		DEBUG("new sid %lx created\n", (unsigned long)ip45h->sid);
-	} else {
-		ip45h->sid = sid_hash_table[sid_hash];
-	}
-
-	/* create IP45 header */
-	memset(ip45h, 0x0, sizeof(ip45h));
-	ip45h->mver = 4;
-	ip45h->sver = 5;
-	ip45h->protocol = IPPROTO_IP45;
-	ip45h->nexthdr = ip6h->ip6_nxt;		/* next header */
-	memset(&ip45h->s45addr, 0x0, sizeof(ip45h->d45addr));
-	ip45h->saddr = (uint32_t)source_v4_address.s_addr;
-
-	/* copy src addr to last 32bytes of src45 addr */
-	memcpy((char *)&ip45h->s45addr + sizeof(ip45h->s45addr) - sizeof(ip45h->saddr), 
-			(char *)&ip45h->saddr, sizeof(ip45h->saddr));
-	memcpy(&ip45h->d45addr, &ip6h->ip6_dst, sizeof(ip45h->d45addr)); 
-	memcpy(&ip45h->daddr, 				/* copy first non 0 32 bytes from src addr */
-			ip45_addr_begin(&ip45h->d45addr), sizeof(ip45h->daddr));
-	ip45h->ttl = htons(ntohs(ip6h->ip6_hlim) - 1);	/*  hop limit */ 
-	//ip45h->tot_len = htons(ntohs(ip6h->ip6_plen) + sizeof(struct ip45hdr));
-
-	/* BSD requires it in host order */
-	ip45h->tot_len = ntohs(ip6h->ip6_plen) + sizeof(struct ip45hdr);
-	ip45h->dmark = 12 - (ip45_addr_begin(&ip45h->d45addr) - (void *)&ip45h->d45addr);
-//	ip45h->check1 = inet_cksum(ip45h, 5);
-//	ip45h->check1 = inet_cksum(ip45h, sizeof(struct iphdr));
-//	ip45h->check2 = inet_cksum(ip45h, sizeof(struct ip45hdr));
 
 	/* prepare dst addr */
+	ip45h = (struct ip45hdr *)buf45;
 	memset(&dst_addr, 0x0, sizeof(dst_addr));
 	dst_addr.sin_family = AF_INET;
 	dst_addr.sin_addr.s_addr = ip45h->daddr;
 	dst_addr.sin_port = htons(0);
 
-	/* copy data to the new buffer */
-	memcpy(buf + sizeof(struct ip45hdr), data, ntohs(ip6h->ip6_plen));
+	len45 = sendto(snd45_sock, buf45, len45, 0, 
+			(struct sockaddr*)&dst_addr, sizeof(dst_addr) );
 
-	len = sendto(snd45_sock, buf, ip45h->tot_len, 0, 
-				(struct sockaddr*)&dst_addr, sizeof(dst_addr) );
-	if (len <= 0 ) {
+	if (len45 <= 0 ) {
 		perror("snd45 send");
 	} else {
 		inet_ntop45((char *)&ip45h->s45addr, saddr, IP45_ADDR_LEN);
@@ -436,7 +497,7 @@ inline void recv6_loop(u_char *user, const struct pcap_pkthdr *h, const u_char *
 		DEBUG("Send IP45 packet %s -> %s, sid=%016lx, proto=%d, bytes=%d\n\n", 
 			saddr, daddr,
 			(unsigned long)ip45h->sid,
-			ip45h->nexthdr, (unsigned int)len);
+			ip45h->nexthdr, (unsigned int)len45);
 	}
 }
 
@@ -465,10 +526,6 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	if ( pthread_create(&recv45_thread, NULL, &recv45_loop, NULL) ) {
-		perror("pthread_create recv_ip45_thread error");
-		exit(2);
-	}
 
 	if (source_v4_address.s_addr == 0x0) {
 		LOG("Source address no initalised (option -4)\n");
@@ -479,11 +536,17 @@ int main(int argc, char *argv[]) {
 		LOG("Source IPv4 address: %s\n", buf);
 	}
 
-	init_snd_sock();
 	if (v6_interface == NULL || !init_pcap(v6_interface)) { 
 		LOG("Cant initialize PCAP on interface %s\n", v6_interface);
 		exit(2);
 	}
+
+	init_snd_sock();
+	if ( pthread_create(&recv45_thread, NULL, &recv45_loop, NULL) ) {
+		perror("pthread_create recv_ip45_thread error");
+		exit(2);
+	}
+
 	if (pcap_loop(pcap_dev, -1, &recv6_loop, NULL) < 0) { 
 		LOG("PCAP: %s\n", pcap_geterr(pcap_dev));
 		exit(2);

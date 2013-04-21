@@ -18,6 +18,12 @@
 #include <ifaddrs.h>
 #include <pcap.h>
 #include <pthread.h>
+#include <linux/if.h>
+#include <linux/if_tun.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
 #include "ip45.h"
 #include "inet_ntop45.h"
 
@@ -26,6 +32,10 @@
 
 #define LOG(fmt, ...) printf(fmt, ##__VA_ARGS__);
 #define DEBUG(fmt, ...) printf(fmt, ##__VA_ARGS__);
+
+struct null_hdr {
+	uint32_t family;
+} null_drt_t;
 
 
 /* to have same structures on both linux and bsd systems */
@@ -128,7 +138,8 @@ ssize_t ip45_to_ipv6(char *ip45pkt, ssize_t len45, char *ip6pkt) {
 
 	/* src, dst address */
 	memcpy(&ip6h->ip6_src, &ip45h->s45addr, sizeof(ip6h->ip6_src)); 
-	ip6h->ip6_dst.s6_addr[15] = 1;
+//	ip6h->ip6_dst.s6_addr[15] = 2;
+	inet_pton(AF_INET6, "2001:17c:1220:f565::93e5:f0f7", &ip6h->ip6_dst);
 
 	/* copy data to the new buffer */
 	memcpy(ip6data, ip45data, len45 - sizeof(struct ip45hdr));
@@ -281,6 +292,38 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt) {
 }
 
 
+int tun_alloc(char *dev, int flags) {
+
+	struct ifreq ifr;
+	int fd, err;
+	char *clonedev = "/dev/net/tun";
+
+
+	if( (fd = open(clonedev, O_RDWR)) < 0 ) {
+		return fd;
+	}
+
+	memset(&ifr, 0, sizeof(ifr));
+
+	ifr.ifr_flags = flags;   /* IFF_TUN or IFF_TAP, plus maybe IFF_NO_PI */
+
+	if (*dev) {
+		strncpy(ifr.ifr_name, dev, IFNAMSIZ);
+	}
+
+	/* try to create the device */
+	if( (err = ioctl(fd, TUNSETIFF, (void *) &ifr)) < 0 ) {
+		close(fd);
+		return err;
+	}
+
+	strcpy(dev, ifr.ifr_name);
+
+	return fd;
+}
+
+
+
 /* initialize bpf and prepare it for use */
 int init_pcap(char *if_name) {
 	char *pcap_expr = NULL;
@@ -316,21 +359,22 @@ int init_pcap(char *if_name) {
 }
 
 /* initialize output socket */
-int init_snd_sock() {
+int init_sock() {
 
+	int sock;
 	u_int yes = 1;
 
-	if ((snd45_sock=socket(AF_INET,SOCK_RAW,IPPROTO_IP45)) < 0) {   
+	if ((sock=socket(AF_INET,SOCK_RAW,IPPROTO_IP45)) < 0) {   
 		perror("snd_sock socket");
-		return 0;
+		return -1;
 	}
 
-	if (setsockopt(snd45_sock, IPPROTO_IP, IP_HDRINCL,(char *)&yes, sizeof(yes)) < 0 ) {
+	if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL,(char *)&yes, sizeof(yes)) < 0 ) {
 		perror("setsockopt IP_HDRINCL");
-		return 0;	
+		return -1;	
 	}
 
-	return 1;
+	return sock;
 }
 
 /* loop  receive and process IP45 packets */
@@ -505,8 +549,23 @@ inline void recv6_loop(u_char *user, const struct pcap_pkthdr *h, const u_char *
 int main(int argc, char *argv[]) {
 
 	pthread_t recv45_thread;
+	char tun_name[IFNAMSIZ] = "ip45";
+	char buf45[PKT_BUF_SIZE];
+	char buf6[PKT_BUF_SIZE];
+	struct tun_pi *tunh = (struct tun_pi *)buf6;
+	struct ether_header *ethh = (struct ether_header *)buf6;
+	struct null_hdr *nullh = (struct null_hdr *)buf6;
+//	struct ip6_hdr *ip6h = (struct ip6_hdr *)(buf6 + sizeof(struct tun_pi));
+//	struct ip6_hdr *ip6h = (struct ip6_hdr *)(buf6 + sizeof(struct ether_header));
+//	struct ip6_hdr *ip6h = (struct ip6_hdr *)(buf6 + sizeof(struct null_hdr));
+	struct ip6_hdr *ip6h = (struct ip6_hdr *)buf6;
+	struct ip45hdr *ip45h = (struct ip45hdr *)buf45;
+	char saddr[IP45_ADDR_LEN];
+	char daddr[IP45_ADDR_LEN];
 	char *v6_interface = NULL;
 	char op;
+	int tunfd, sockfd, maxfd;
+	ssize_t len;
 
 	source_v4_address.s_addr = 0x0;
 
@@ -536,12 +595,109 @@ int main(int argc, char *argv[]) {
 		LOG("Source IPv4 address: %s\n", buf);
 	}
 
+
+	if ( (tunfd = tun_alloc(tun_name, IFF_TUN | IFF_NO_PI)) < 0 ) {
+		LOG("Cant initialize ip45 on interface\n");
+		exit(2);
+	}
+	LOG("ip45 device: %s\n", tun_name);
+
+	if ((sockfd = init_sock()) < 0) {
+		LOG("Cant initialize ip45 socket\n");
+		exit(2);
+	}
+
+
 	if (v6_interface == NULL || !init_pcap(v6_interface)) { 
 		LOG("Cant initialize PCAP on interface %s\n", v6_interface);
 		exit(2);
 	}
 
-	init_snd_sock();
+
+	maxfd = (tunfd > sockfd) ? tunfd : sockfd;
+
+	for (;;) { 
+		int ret;
+		fd_set rd_set;	
+
+		FD_ZERO(&rd_set);
+		FD_SET(tunfd, &rd_set); 
+		FD_SET(sockfd, &rd_set);
+
+		ret = select(maxfd + 1, &rd_set, NULL, NULL, NULL);
+
+/*
+		if (ret < 0 && errno == EINTR) {
+			continue;
+		}
+*/
+
+		if (ret < 0) {
+			perror("select()");
+			exit(2);
+		}
+
+		if ( FD_ISSET(sockfd, &rd_set) ) {
+			/* IP45 received */
+
+			if ( (len = recv(sockfd, buf45, sizeof(buf45), 0)) != 0 ) {
+
+				len = ip45_to_ipv6(buf45, len, (char *)ip6h);
+
+				if (len <= 0 ) {
+					LOG("Invalid IP45 packet\n");
+					continue;
+				}
+
+				/* valid IP45 packet */
+				ip45h = (struct ip45h *)buf45;
+
+				inet_ntop45((char *)&ip45h->s45addr, saddr, IP45_ADDR_LEN);
+				inet_ntop45((char *)&ip45h->d45addr, daddr, IP45_ADDR_LEN);
+		
+				DEBUG("Received IP45 packet %s->%s, sid=%016lx, proto=%d\n", 
+					saddr, daddr, 
+					(unsigned long)ip45h->sid, ip45h->nexthdr);
+
+				//tunh->flags = 0x0;
+				//tunh->proto = htons(ETH_P_IPV6);
+//				ethh->ether_type = htons(ETHERTYPE_IPV6);
+				//ethh->ether_shost[5] = 5;
+				//ethh->ether_dhost[5] = 1;
+//				nullh->family = AF_INET6;
+
+				if ( (len = write(tunfd, buf6, len) ) < 0 ) {
+				//if ( (len = write(tunfd, buf6, len + sizeof(struct tun_pi))) < 0 ) {
+				//if ( (len = write(tunfd, buf6, len + sizeof(struct ether_header))) < 0 ) {
+				//if ( (len = pcap_inject(pcap_dev_snd, buf6, len + sizeof(struct ether_header))) < 0 ) {
+					perror("send tunfd");
+				}
+
+
+
+			}
+		}
+
+		if(FD_ISSET(tunfd, &rd_set)) {
+			/* IPv6 received */
+
+
+			len = read(tunfd, buf6, sizeof(buf6));
+
+			printf("UUU READ %d:\n", len);
+			{ int i = 0;
+			for (i = 0; i < len; i++) {
+				printf("%02x ", buf6[i] & 0xFF);
+			}
+			printf("\n");
+			}
+
+		}
+
+
+	}
+
+/*
 	if ( pthread_create(&recv45_thread, NULL, &recv45_loop, NULL) ) {
 		perror("pthread_create recv_ip45_thread error");
 		exit(2);
@@ -553,6 +709,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	return 2;
+*/
 
 }
 

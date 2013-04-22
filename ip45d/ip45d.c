@@ -138,8 +138,8 @@ ssize_t ip45_to_ipv6(char *ip45pkt, ssize_t len45, char *ip6pkt) {
 
 	/* src, dst address */
 	memcpy(&ip6h->ip6_src, &ip45h->s45addr, sizeof(ip6h->ip6_src)); 
-//	ip6h->ip6_dst.s6_addr[15] = 2;
-	inet_pton(AF_INET6, "2001:17c:1220:f565::93e5:f0f7", &ip6h->ip6_dst);
+	ip6h->ip6_dst.s6_addr[15] = 1;
+//	inet_pton(AF_INET6, "2001:17c:1220:f565::93e5:f0f7", &ip6h->ip6_dst);
 
 	/* copy data to the new buffer */
 	memcpy(ip6data, ip45data, len45 - sizeof(struct ip45hdr));
@@ -554,17 +554,18 @@ int main(int argc, char *argv[]) {
 	char buf6[PKT_BUF_SIZE];
 	struct tun_pi *tunh = (struct tun_pi *)buf6;
 	struct ether_header *ethh = (struct ether_header *)buf6;
-	struct null_hdr *nullh = (struct null_hdr *)buf6;
+//	struct null_hdr *nullh = (struct null_hdr *)buf6;
 //	struct ip6_hdr *ip6h = (struct ip6_hdr *)(buf6 + sizeof(struct tun_pi));
-//	struct ip6_hdr *ip6h = (struct ip6_hdr *)(buf6 + sizeof(struct ether_header));
+	struct ip6_hdr *ip6h = (struct ip6_hdr *)(buf6 + sizeof(struct ether_header));
 //	struct ip6_hdr *ip6h = (struct ip6_hdr *)(buf6 + sizeof(struct null_hdr));
-	struct ip6_hdr *ip6h = (struct ip6_hdr *)buf6;
+//	struct ip6_hdr *ip6h = (struct ip6_hdr *)buf6;
 	struct ip45hdr *ip45h = (struct ip45hdr *)buf45;
 	char saddr[IP45_ADDR_LEN];
 	char daddr[IP45_ADDR_LEN];
 	char *v6_interface = NULL;
 	char op;
 	int tunfd, sockfd, maxfd;
+	struct sockaddr_in dst_addr;
 	ssize_t len;
 
 	source_v4_address.s_addr = 0x0;
@@ -661,15 +662,16 @@ int main(int argc, char *argv[]) {
 
 				//tunh->flags = 0x0;
 				//tunh->proto = htons(ETH_P_IPV6);
-//				ethh->ether_type = htons(ETHERTYPE_IPV6);
-				//ethh->ether_shost[5] = 5;
-				//ethh->ether_dhost[5] = 1;
+				ethh->ether_type = htons(ETHERTYPE_IPV6);
+//				ethh->ether_shost[5] = 5;
+//				ethh->ether_dhost[5] = 1;
 //				nullh->family = AF_INET6;
 
-				if ( (len = write(tunfd, buf6, len) ) < 0 ) {
+//				if ( (len = write(tunfd, buf6, len) ) < 0 ) {
 				//if ( (len = write(tunfd, buf6, len + sizeof(struct tun_pi))) < 0 ) {
 				//if ( (len = write(tunfd, buf6, len + sizeof(struct ether_header))) < 0 ) {
-				//if ( (len = pcap_inject(pcap_dev_snd, buf6, len + sizeof(struct ether_header))) < 0 ) {
+				//if ( (len = pcap_inject(pcap_dev, buf6, len + sizeof(struct ether_header))) < 0 ) {
+				if ( (len = pcap_sendpacket(pcap_dev, buf6, len + sizeof(struct ether_header))) < 0 ) {
 					perror("send tunfd");
 				}
 
@@ -681,19 +683,44 @@ int main(int argc, char *argv[]) {
 		if(FD_ISSET(tunfd, &rd_set)) {
 			/* IPv6 received */
 
+			printf("UUU1 READ %d:\n", len);
 
-			len = read(tunfd, buf6, sizeof(buf6));
+			if ( (len = read(tunfd, buf6, sizeof(buf6)), 0) > 0 ) {
 
-			printf("UUU READ %d:\n", len);
-			{ int i = 0;
-			for (i = 0; i < len; i++) {
-				printf("%02x ", buf6[i] & 0xFF);
+				printf("UUU2 READ %d:\n", len);
+				{ int i = 0;
+				for (i = 0; i < len; i++) {
+					printf("%02x ", buf6[i] & 0xFF);
+				}
+				printf("\n");
+				}
+
+				len = ipv6_to_ip45(buf6, len, buf45);
+
+				if (len <= 0 ) {
+					LOG("Invalid IPv6 packet\n");
+					continue;
+				}
+
+				inet_ntop(AF_INET6, (char *)&ip6h->ip6_src, saddr, IP45_ADDR_LEN);
+				inet_ntop(AF_INET6, (char *)&ip6h->ip6_dst, daddr, IP45_ADDR_LEN);
+				DEBUG("Received IPv6 packet %s -> %s, proto=%d bytes=%d\n", 
+						saddr, daddr,
+						ip6h->ip6_nxt, len);
+
+				/* prepare dst addr */
+				memset(&dst_addr, 0x0, sizeof(dst_addr));
+				dst_addr.sin_family = AF_INET;
+				dst_addr.sin_addr.s_addr = ip45h->daddr;
+				dst_addr.sin_port = htons(0);
+
+				len = sendto(sockfd, buf45, len, 0, 
+					(struct sockaddr*)&dst_addr, sizeof(dst_addr) );
+				if ( len < 0 ) {
+					perror("send sockfd");
+				}
 			}
-			printf("\n");
-			}
-
 		}
-
 
 	}
 

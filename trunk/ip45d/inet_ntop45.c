@@ -1,13 +1,5 @@
 
-#include <sys/param.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-
-#include <netinet/in.h>
 #include <arpa/inet.h>
-#include <arpa/nameser.h>
-
-#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 

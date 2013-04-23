@@ -128,7 +128,7 @@ ssize_t ip45_to_ipv6(char *ip45pkt, ssize_t len45, char *ip6pkt) {
 	datalen = len45 - sizeof(struct ip45hdr);
 
 	/* prepare IPv6 packet */
-	memset(ip6h, 0, sizeof(ip6h));
+	memset(ip6h, 0, sizeof(struct ip6_hdr));
 
 //	ip6h->ip6_vfc = htons(0x60); /* 4 bits version, 4 bits priority */
 	ip6h->ip6_flow = htonl ((6 << 28) | (0 << 20) | 0); /* 4 bits version, 4 bits priority */

@@ -1,5 +1,4 @@
 
-#define __FAVOR_BSD 
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +15,7 @@
 #include <ip6.h>
 #else 
 #include <netinet/ip6.h>
+#define __FAVOR_BSD 
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
 #include <arpa/inet.h>

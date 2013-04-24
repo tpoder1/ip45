@@ -1,9 +1,20 @@
 
+/* 
+ Macros used for determing the propper platform 
+ #ifdef WIN32       - Microsoft Windows 
+ #ifdef __APPLE__   - MAC OS X - Darwin
+ #ifdef __linux     - Linux 
+*/
+
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#ifdef __APPLE__
+#include <netinet/in.h>
+#endif
 
 #ifdef WIN32
 #include <windows.h>
@@ -11,8 +22,8 @@
 #include <winsock2.h>
 #include <Ws2tcpip.h>
 #include <winioctl.h>
-#include <tap-windows.h>
-#include <ip6.h>
+#include "tap-windows.h"
+#include "ip6.h"
 #else 
 #include <netinet/ip6.h>
 #define __FAVOR_BSD 
@@ -20,13 +31,25 @@
 #include <netinet/udp.h>
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
+#endif 
+
+#ifdef __linux
 #include <linux/if.h>
 #include <linux/if_tun.h>
+#define TUNDEV_NAME "/dev/net/tun"
 #endif 
+
+#ifdef __APPLE__
+#include <net/if.h>
+#include "tun_ioctls.h"
+#define TUNDEV_NAME "/dev/tun6"
+#endif 
+
 
 #include <fcntl.h>
 #include "ip45.h"
 #include "inet_ntop45.h"
+
 
 #define PKT_BUF_SIZE 2600
 #define VERSION "$LastChangedRevision$"
@@ -39,12 +62,10 @@ struct null_hdr {
 } null_drt_t;
 
 
-//struct tcphdr { uint16_t aa; };
 
 /* to have same structures on both linux and bsd systems */
 
 int debug = 0;						/* 1 = debug mode */
-//pcap_t *pcap_dev, *pcap_dev_snd;	/* pcap device */
 uint64_t sid_hash_table[65536] = { };
 struct in_addr source_v4_address;
 
@@ -294,30 +315,51 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt) {
 }
 
 
-int tun_alloc(char *dev, int flags) {
+int tun_alloc(char *dev) {
 
 	struct ifreq ifr;
 	int fd, err;
-	char *clonedev = "/dev/net/tun";
+	int yes = 1;
+	char *clonedev = TUNDEV_NAME;
 
 
 	if( (fd = open(clonedev, O_RDWR)) < 0 ) {
-		return fd;
+		perror("open: ");
+		return -1;
 	}
 
 	memset(&ifr, 0, sizeof(ifr));
-
-	ifr.ifr_flags = flags;   /* IFF_TUN or IFF_TAP, plus maybe IFF_NO_PI */
 
 	if (*dev) {
 		strncpy(ifr.ifr_name, dev, IFNAMSIZ);
 	}
 
+#ifdef __linux
+	ifr.ifr_flags = IFF_TUN | IFF_NO_PI;
+
 	/* try to create the device */
 	if( (err = ioctl(fd, TUNSETIFF, (void *) &ifr)) < 0 ) {
+		perror("ioctl TUNSETIFF: ");
 		close(fd);
 		return err;
 	}
+#endif 
+
+#ifdef __APPLE__
+	if (ioctl(fd, TUNSIFHEAD, &yes) < 0) {
+		perror("ioctl TUNSIFHEAD: ");
+		return -1;
+	}
+
+	/* try to create the device */
+/*
+	if( (err = ioctl(fd, SIOCGIFFLAGS, (void *) &ifr)) < 0 ) {
+		perror("ioctl SIOCGIFFLAGS: ");
+		close(fd);
+		return err;
+	}
+*/
+#endif
 
 	strcpy(dev, ifr.ifr_name);
 
@@ -345,7 +387,8 @@ int init_sock() {
 
 int main(int argc, char *argv[]) {
 
-	char tun_name[IFNAMSIZ] = "ip45";
+	//char tun_name[IFNAMSIZ] = "ip45";
+	char tun_name[IFNAMSIZ] = "tun0";
 	char buf45[PKT_BUF_SIZE];
 	char buf6[PKT_BUF_SIZE];
 //	struct tun_pi *tunh = (struct tun_pi *)buf6;
@@ -389,7 +432,7 @@ int main(int argc, char *argv[]) {
 	}
 
 
-	if ( (tunfd = tun_alloc(tun_name, IFF_TUN | IFF_NO_PI)) < 0 ) {
+	if ( (tunfd = tun_alloc(tun_name)) < 0 ) {
 		LOG("Cant initialize ip45 on interface\n");
 		exit(2);
 	}

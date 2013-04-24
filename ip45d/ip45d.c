@@ -1,17 +1,30 @@
 
+#define __FAVOR_BSD 
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#ifdef WIN32
+#include <windows.h>
+//#include <winsock.h>
+#include <winsock2.h>
+#include <Ws2tcpip.h>
+#include <winioctl.h>
+#include <tap-windows.h>
+#include <ip6.h>
+#else 
 #include <netinet/ip6.h>
-#define __FAVOR_BSD 
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
 #include <arpa/inet.h>
+#include <sys/ioctl.h>
 #include <linux/if.h>
 #include <linux/if_tun.h>
+#endif 
+
 #include <fcntl.h>
-#include <sys/ioctl.h>
 #include "ip45.h"
 #include "inet_ntop45.h"
 
@@ -25,6 +38,8 @@ struct null_hdr {
 	uint32_t family;
 } null_drt_t;
 
+
+//struct tcphdr { uint16_t aa; };
 
 /* to have same structures on both linux and bsd systems */
 
@@ -43,11 +58,11 @@ void usage(void) {
 
 uint16_t inet_cksum(addr, len) 
 char *addr; 
-u_int len;
+int len;
 {
     register int nleft = (int)len;
-    register u_int16_t *w = (u_int16_t *)addr;
-    u_int16_t answer = 0;
+    register uint16_t *w = (uint16_t *)addr;
+    uint16_t answer = 0;
     register int sum = 0;
 
 
@@ -143,12 +158,12 @@ ssize_t ip45_to_ipv6(char *ip45pkt, ssize_t len45, char *ip6pkt) {
 
 			/* an ugly way to cumpute TCP checksum - to be repaired */
 			tcp->th_sum = 0x0;
-			memcpy(xbuf + xptr, &ip6h->ip6_src, sizeof(ip6h->ip6_src));
+			memcpy(xbuf + xptr, (char *)&(ip6h->ip6_src), sizeof(struct in6_addr));
 			xptr += sizeof(ip6h->ip6_src);
 			memcpy(xbuf + xptr, &ip6h->ip6_dst, sizeof(ip6h->ip6_dst));
 			xptr += sizeof(ip6h->ip6_dst);
-			memcpy(xbuf + xptr, &tcp_len, sizeof(u_int32_t));
-			xptr += sizeof(u_int32_t);
+			memcpy(xbuf + xptr, &tcp_len, sizeof(uint32_t));
+			xptr += sizeof(uint32_t);
 			memcpy(xbuf + xptr, &ip6nxt, sizeof(ip6nxt));
 			xptr += sizeof(ip6nxt);
 			memcpy(xbuf + xptr, ip6data, datalen);
@@ -239,7 +254,8 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt) {
 	sid_hash += inet_cksum(&sport, sizeof(sport));
 	sid_hash += inet_cksum(&dport, sizeof(dport));
 	if (sid_hash_table[sid_hash] == 0) {
-		ip45h->sid = random();	/* should be random number */
+		//ip45h->sid = random();	/* should be random number */
+		ip45h->sid = rand();	/* should be random number */
 		DEBUG("new sid %lx created\n", (unsigned long)ip45h->sid);
 	} else {
 		ip45h->sid = sid_hash_table[sid_hash];
@@ -312,7 +328,7 @@ int tun_alloc(char *dev, int flags) {
 int init_sock() {
 
 	int sock;
-	u_int yes = 1;
+	int yes = 1;
 
 	if ((sock=socket(AF_INET,SOCK_RAW,IPPROTO_IP45)) < 0) {   
 		perror("snd_sock socket");

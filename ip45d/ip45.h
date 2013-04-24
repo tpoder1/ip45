@@ -7,9 +7,18 @@
 #define _IP45_H "2013-04-16 01"
 #endif
 
+#ifdef WIN32
+#include <windows.h>
+#include <winsock.h>
+#include <winsock2.h>
+#endif 
+
 /* #include <linux/types.h> */
 /* #include <asm/byteorder.h> */
 
+#ifdef WIN32 
+typedef short sa_family_t;
+#endif
 
 
 #ifndef IPPROTO_IP45_DEFINED

@@ -37,12 +37,14 @@
 #include <linux/if.h>
 #include <linux/if_tun.h>
 #define TUNDEV_NAME "/dev/net/tun"
+#define TUNIF_NAME "ip45"
 #endif 
 
 #ifdef __APPLE__
 #include <net/if.h>
 #include "tun_ioctls.h"
 #define TUNDEV_NAME "/dev/tun6"
+#define TUNIF_NAME "tun6"
 #endif 
 
 
@@ -387,8 +389,7 @@ int init_sock() {
 
 int main(int argc, char *argv[]) {
 
-	//char tun_name[IFNAMSIZ] = "ip45";
-	char tun_name[IFNAMSIZ] = "tun0";
+	char tun_name[IFNAMSIZ] = TUNIF_NAME;
 	char buf45[PKT_BUF_SIZE];
 	char buf6[PKT_BUF_SIZE];
 //	struct tun_pi *tunh = (struct tun_pi *)buf6;

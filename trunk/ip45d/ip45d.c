@@ -43,8 +43,8 @@
 #ifdef __APPLE__
 #include <net/if.h>
 #include "tun_ioctls.h"
-#define TUNDEV_NAME "/dev/tun6"
-#define TUNIF_NAME "tun6"
+#define TUNDEV_NAME "/dev/tun4"
+#define TUNIF_NAME "tun4"
 #endif 
 
 
@@ -321,7 +321,7 @@ int tun_alloc(char *dev) {
 
 	struct ifreq ifr;
 	int fd, err;
-	int yes = 1;
+	int no = 0;
 	char *clonedev = TUNDEV_NAME;
 
 
@@ -348,7 +348,7 @@ int tun_alloc(char *dev) {
 #endif 
 
 #ifdef __APPLE__
-	if (ioctl(fd, TUNSIFHEAD, &yes) < 0) {
+	if (ioctl(fd, TUNSIFHEAD, &no) < 0) {
 		perror("ioctl TUNSIFHEAD: ");
 		return -1;
 	}

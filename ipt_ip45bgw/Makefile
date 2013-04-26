@@ -12,11 +12,12 @@ obj-m := ipt_ip45bgw.o
 
 KVERSION := $(shell uname -r)
 PLATFORM := $(shell uname -m)
-KPATH := /lib/modules/$(KVERSION)/build
+PATH := /lib/modules/$(KVERSION)/build
 
 #ARCH=mip
 #CROSS_COMPILE=mips-openwrt
-#KPATH := /root/rpmbuild/kernel/linux-3.5.7
+#KPATH := /root/rpmbuild/linux-2.6.24
+#KPATH := /root/rpmbuild/DD-WRT/src/tmp/linux-2.6.23
 
 all:	libipt_ip45bgw.so
 	$(MAKE) -C $(KPATH) M=$(PWD) modules

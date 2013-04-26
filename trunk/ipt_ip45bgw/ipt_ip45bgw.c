@@ -15,6 +15,9 @@ MODULE_AUTHOR("Tomas Podermanski <tpoder@cis.vutbr.cz>");
 MODULE_DESCRIPTION("Xtables: IP45 - IP45 Border Gateway Module");
 MODULE_LICENSE("GPL");
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
+#error "The module is not supported on this kernel. Use >= 2.6.28"
+#endif
 
 #define NIP45FMT "%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d"
 #define NIP45QUAD(addr) \
@@ -53,7 +56,7 @@ static void ip45bgw_log(
 
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,0,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35)
 static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_action_param *par) {
 #else
 static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param *par) {

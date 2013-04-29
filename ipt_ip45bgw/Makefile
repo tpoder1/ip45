@@ -12,7 +12,7 @@ obj-m := ipt_ip45bgw.o
 
 KVERSION := $(shell uname -r)
 PLATFORM := $(shell uname -m)
-PATH := /lib/modules/$(KVERSION)/build
+KPATH := /lib/modules/$(KVERSION)/build
 
 #ARCH=mip
 #CROSS_COMPILE=mips-openwrt
@@ -36,7 +36,8 @@ clean:
 	rm -f *~
 
 install:
-	install ipt_ip45bgw.ko /lib/modules/$(KVERSION)
+	install ipt_ip45bgw.ko /lib/modules/$(KVERSION)/extra
+	depmod -a
 ifeq ($(PLATFORM),x86_64)
 	install libipt_ip45bgw.so /lib64/xtables
 else

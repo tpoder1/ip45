@@ -4,8 +4,8 @@ supported on kernel >= 2.6.28
 USE
 ====================================================
 
-iptables -t mangle  -I POSTROUTING  -o eth0 -p 155 -j ip45bgw --outer-addr=147.229.240.241 --inner-prefix=192.168.0.0/24
-iptables -t mangle  -I PREROUTING  -i eth0 -p 155 -j ip45bgw --outer-addr=147.229.240.241 --inner-prefix=192.168.0.0/24
+iptables -t mangle  -I POSTROUTING  -o eth0 -p 155 -j ip45bgw --upstream-addr=78.102.66.182  --downstream-prefix=192.168.1.0/24
+iptables -t mangle  -I PREROUTING  -i eth0 -p 155 -j ip45bgw --upstream-addr=78.102.66.182  --downstream-prefix=192.168.1.0/24
 
 
 MANUAL INSTALATION 

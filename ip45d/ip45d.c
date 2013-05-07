@@ -279,6 +279,7 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt) {
 	if (sid_hash_table[sid_hash] == 0) {
 		//ip45h->sid = random();	/* should be random number */
 		ip45h->sid = rand();	/* should be random number */
+		sid_hash_table[sid_hash] = ip45h->sid;
 		DEBUG("new sid %lx created\n", (unsigned long)ip45h->sid);
 	} else {
 		ip45h->sid = sid_hash_table[sid_hash];

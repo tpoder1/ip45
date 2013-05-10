@@ -64,17 +64,14 @@ struct null_hdr {
 } null_drt_t;
 
 
-
-/* to have same structures on both linux and bsd systems */
-
 int debug = 0;						/* 1 = debug mode */
 uint64_t sid_hash_table[65536] = { };
 struct in_addr source_v4_address;
 
 void usage(void) {
-	printf("Multicast replicator version %s\n", VERSION);
+	printf("IP45 daemon version %s\n", VERSION);
 	printf("Usage:\n");
-	printf("ip45d -4 <ip address of IPv4 interface> -6 <interface to listen IPv6 traffic>\n");
+	printf("ip45d -4 <ip address of IPv4 interface>\n");
 	printf(" -4 : local IPv4 address for outgoing IP45 packets\n");
 	exit(1);
 }
@@ -422,7 +419,6 @@ int main(int argc, char *argv[]) {
 			case '?': usage();
 		}
 	}
-
 
 	if (source_v4_address.s_addr == 0x0) {
 		LOG("Source address no initalised (option -4)\n");

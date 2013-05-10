@@ -51,6 +51,7 @@
 #include <fcntl.h>
 #include "ip45.h"
 #include "inet_ntop45.h"
+#include "session_table.h"
 
 
 #define PKT_BUF_SIZE 2600
@@ -65,8 +66,9 @@ struct null_hdr {
 
 
 int debug = 0;						/* 1 = debug mode */
-uint64_t sid_hash_table[65536] = { };
+//uint64_t sid_hash_table[65536] = { };
 struct in_addr source_v4_address;
+struct session_table_t sessions;
 
 void usage(void) {
 	printf("IP45 daemon version %s\n", VERSION);
@@ -124,7 +126,8 @@ ssize_t ip45_to_ipv6(char *ip45pkt, ssize_t len45, char *ip6pkt) {
 	ssize_t datalen;
 	uint16_t sport = 0;
 	uint16_t dport = 0;
-	uint16_t sid_hash = 0;
+//	uint16_t sid_hash = 0;
+	struct session_entry_t *ses_rec;
 
 
 	/* check version */
@@ -148,6 +151,7 @@ ssize_t ip45_to_ipv6(char *ip45pkt, ssize_t len45, char *ip6pkt) {
 	}
 	datalen = len45 - sizeof(struct ip45hdr);
 
+
 	/* prepare IPv6 packet */
 	memset(ip6h, 0, sizeof(struct ip6_hdr));
 
@@ -157,8 +161,24 @@ ssize_t ip45_to_ipv6(char *ip45pkt, ssize_t len45, char *ip6pkt) {
 	ip6h->ip6_nxt = ip45h->nexthdr;		/* next header */
 	ip6h->ip6_hlim = htons(ntohs(ip45h->ttl) - 1);	/*  hop limit */ 
 
+	/* lookup for SID */
+	ses_rec = session_table_lookup_sid(&sessions, ip45h->sid);
+	if (ses_rec == NULL) {	/* the session not seen before */
+		struct session_entry_t tmp;
+
+		memcpy(&tmp.init_s45addr, &ip45h->s45addr, sizeof(ip45h->s45addr));
+/*		memcpy(&tmp.init_d45addr, &ip45h->s45addr, sizeof(ip45h->d45addr)); */
+		tmp.proto = ip45h->nexthdr;
+		tmp.sid = ip45h->sid;
+		ses_rec = session_table_add(&sessions, &tmp);
+		DEBUG("New remote session sid:%lx\n", (unsigned long)ip45h->sid);
+	}
+
+	memcpy(&ses_rec->last_s45addr, &ip45h->s45addr, sizeof(ip45h->s45addr));
+/*	memcpy(&ses_rec->last_d45addr, &ip45h->d45addr, sizeof(ip45h->s45addr)); */
+
 	/* src, dst address */
-	memcpy(&ip6h->ip6_src, &ip45h->s45addr, sizeof(ip6h->ip6_src)); 
+	memcpy(&ip6h->ip6_src, &ses_rec->init_s45addr, sizeof(ip6h->ip6_src)); 
 	ip6h->ip6_dst.s6_addr[15] = 2;
 //	inet_pton(AF_INET6, "2001:17c:1220:f565::93e5:f0f7", &ip6h->ip6_dst);
 
@@ -204,12 +224,17 @@ ssize_t ip45_to_ipv6(char *ip45pkt, ssize_t len45, char *ip6pkt) {
 	}
 
 	/* store the sit into hash table */
+	ses_rec->sport = sport;
+	ses_rec->dport = dport;
+
+/*
 	sid_hash = 0;
 	sid_hash += inet_cksum(&ip45h->s45addr, sizeof(ip45h->s45addr));
 	sid_hash += inet_cksum(&ip45h->nexthdr, sizeof(ip45h->nexthdr));
 	sid_hash += inet_cksum(&sport, sizeof(sport));
 	sid_hash += inet_cksum(&dport, sizeof(dport));
 	sid_hash_table[sid_hash] = ip45h->sid;
+*/
 
 	return datalen + sizeof(struct ip6_hdr);
 }
@@ -224,7 +249,8 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt) {
 	ssize_t datalen;
 	uint16_t sport = 0;
 	uint16_t dport = 0;
-	uint16_t sid_hash = 0;
+	struct session_entry_t *ses_rec;
+//	uint16_t sid_hash = 0;
 	static const unsigned char localhost_bytes[] =
 		{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 };
 
@@ -264,35 +290,54 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt) {
 				
 	}
 
+	/* lookup for record in session table */
+	/* all srcs and dsts are switched (opposite direction) */
+	ses_rec = session_table_lookup(&sessions, dport, sport, ip6h->ip6_nxt);
+	if (ses_rec == NULL) {	/* the session not seen before */
+		struct session_entry_t tmp;
+		memcpy(&tmp.init_s45addr, &ip6h->ip6_dst, sizeof(ip6h->ip6_dst));
+		memcpy(&tmp.last_s45addr, &ip6h->ip6_dst, sizeof(ip6h->ip6_dst));
+/*		memcpy(&tmp.init_d45addr, &ip6h->ip6_src, sizeof(ip6h->ip6_src)); */
+		tmp.proto = ip6h->ip6_nxt;
+		tmp.sport = dport;
+		tmp.dport = sport;
+		tmp.sid = rand();
+		ses_rec = session_table_add(&sessions, &tmp);
+		DEBUG("new sid %lx created\n", (unsigned long)tmp.sid);
+	}
+
 	/* create IP45 header */
 	memset(ip45h, 0x0, sizeof(struct ip45hdr));
 
 	/* find the sid into hash table  */
-	sid_hash = 0;
+/*	sid_hash = 0;
 	sid_hash += inet_cksum(&ip6h->ip6_dst, sizeof(ip6h->ip6_dst));
 	sid_hash += inet_cksum(&ip6h->ip6_nxt, sizeof(ip6h->ip6_nxt));
 	sid_hash += inet_cksum(&sport, sizeof(sport));
 	sid_hash += inet_cksum(&dport, sizeof(dport));
-	if (sid_hash_table[sid_hash] == 0) {
+	if (sid_hash_table[sid_hash] == 0) { */
 		//ip45h->sid = random();	/* should be random number */
-		ip45h->sid = rand();	/* should be random number */
-		sid_hash_table[sid_hash] = ip45h->sid;
+//		ip45h->sid = rand();	/* should be random number */
+/*		sid_hash_table[sid_hash] = ip45h->sid;
 		DEBUG("new sid %lx created\n", (unsigned long)ip45h->sid);
 	} else {
 		ip45h->sid = sid_hash_table[sid_hash];
 	}
+*/
 
 	ip45h->mver = 4;
 	ip45h->sver = 5;
 	ip45h->protocol = IPPROTO_IP45;
 	ip45h->nexthdr = ip6h->ip6_nxt;		/* next header */
+	ip45h->sid = ses_rec->sid;
 //	memset(&ip45h->s45addr, 0x0, sizeof(ip45h->d45addr));
 	ip45h->saddr = (uint32_t)source_v4_address.s_addr;
 
 	/* copy src addr to last 32bytes of src45 addr */
 	memcpy((char *)&ip45h->s45addr + sizeof(ip45h->s45addr) - sizeof(ip45h->saddr), 
 			(char *)&ip45h->saddr, sizeof(ip45h->saddr));
-	memcpy(&ip45h->d45addr, &ip6h->ip6_dst, sizeof(ip45h->d45addr)); 
+	//memcpy(&ip45h->d45addr, &ip6h->ip6_dst, sizeof(ip45h->d45addr)); 
+	memcpy(&ip45h->d45addr, &ses_rec->last_s45addr, sizeof(ip45h->d45addr)); 
 	memcpy(&ip45h->daddr, 				/* copy first non 0 32 bytes from src addr */
 			ip45_addr_begin(&ip45h->d45addr), sizeof(ip45h->daddr));
 	ip45h->ttl = htons(ntohs(ip6h->ip6_hlim) - 1);	/*  hop limit */ 
@@ -318,9 +363,11 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt) {
 int tun_alloc(char *dev) {
 
 	struct ifreq ifr;
-	int fd, err;
-	int no = 0;
+	int fd, err, no;
 	char *clonedev = TUNDEV_NAME;
+
+	err = 0;
+	no = 0;
 
 
 	if( (fd = open(clonedev, O_RDWR)) < 0 ) {
@@ -419,6 +466,8 @@ int main(int argc, char *argv[]) {
 			case '?': usage();
 		}
 	}
+
+	session_table_init(&sessions);
 
 	if (source_v4_address.s_addr == 0x0) {
 		LOG("Source address no initalised (option -4)\n");

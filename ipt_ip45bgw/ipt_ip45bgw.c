@@ -74,7 +74,7 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 	}
 
 	/* check values in header */
-	if (ip45h->mver != 4 || ip45h->sver !=5 || ip45h->protocol != IPPROTO_IP45) {
+	if (!is_ip45_pkt(ip45h)) {
 		printk(KERN_ERR "IP45: invalid IP45 packet\n");
 		return NF_DROP;
 	}
@@ -98,10 +98,15 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 		ip45h->s45mark += shlen;
 		/* copy shlen bytes from source IP address to the 
  		* s45mark position (from the end) to s45stck */
-		memcpy((char *)&ip45h->s45stck + sizeof(ip45h->s45stck) - ip45h->s45mark, 
-				(char *)&ip45h->saddr - shlen , shlen);
-		ip45h->saddr = upstream;
-		csum_replace4(&ip45h->check1, oldip, ip45h->saddr);
+		if (ip45h->s45mark > sizeof(struct in45_stck))  {
+			memcpy((char *)&ip45h->s45stck + sizeof(struct in45_stck) - ip45h->s45mark, 
+					(char *)&ip45h->saddr - shlen , shlen);
+			ip45h->saddr = upstream;
+			csum_replace4(&ip45h->check1, oldip, ip45h->saddr);
+		} else {
+			pr_devel("IP45: s45mark reached the maximum value\n");
+			return NF_DROP;
+		}
 
 	}
 
@@ -120,7 +125,7 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 			// if dmark is set to 0 we have already processed all levels of IP45 border gateway
 			memcpy(daddr, &downstream, sizeof(daddr) - shlen);
 			memcpy((char *)daddr + sizeof(daddr) - shlen, 
-					d45stck + sizeof(d45stck) - (int)ip45h->d45mark, shlen);
+					d45stck + sizeof(struct in45_stck) - ip45h->d45mark, shlen);
 			ip45h->d45mark -= shlen;
 			csum_replace4(&ip45h->check1, oldip, ip45h->daddr);
 		}

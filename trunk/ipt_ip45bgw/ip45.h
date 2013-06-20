@@ -4,7 +4,7 @@
 */
 
 #ifndef _NET_IP45_H
-#define _NET_IP45_H "2013-06-18 01"
+#define _NET_IP45_H "2013-06-20 01"
 
 #include <linux/types.h>
 #include <asm/byteorder.h>
@@ -109,6 +109,15 @@ static inline void *ip45_addr_begin(const struct in45_addr *addr)
 	return p;
 }
 
+/* detect whether packet is valid IP45 packet */
+static inline int is_ip45_pkt(const struct ip45hdr *ip45h)
+{
+	return (ip45h->mver == 4 && \
+			ip45h->sver == 5 && \
+			ip45h->protocol == IPPROTO_UDP && \
+			ip45h->ip45dp == IP45_COMPAT_UDP_PORT);
+}
+
 
 #ifdef __KERNEL__
 #include <linux/skbuff.h>
@@ -123,7 +132,7 @@ static inline int is_ip45(const struct sk_buff *skb)
 	return (ip45_hdr(skb)->mver == 4 && \
 			ip45_hdr(skb)->sver == 5 && \
 			ip45_hdr(skb)->protocol == IPPROTO_UDP && \
-			ip45_hdr(skb)->ip45dp == 45);
+			ip45_hdr(skb)->ip45dp == IP45_COMPAT_UDP_PORT);
 }
 
 /* converts IPv4 and IP45stack address into single IP45 address */

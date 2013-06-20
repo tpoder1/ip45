@@ -51,7 +51,7 @@ static void ip45bgw_log(
 {
 	printk(KERN_INFO "NF IP45: %s " NIPFMT " -> " NIPFMT " [IP45 " NIP45FMT " -> " NIP45FMT "] [SID:%lX] \n", str,
 			NIPQUAD(ip45h->saddr), NIPQUAD(ip45h->daddr), 
-			NIP45QUAD(ip45h->d45addr), NIP45QUAD(ip45h->s45addr),
+			NIP45QUAD(ip45h->d45stck), NIP45QUAD(ip45h->s45stck),
 			(unsigned long)ip45h->sid);
 
 }
@@ -86,17 +86,23 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 	
 	memcpy(&downstream, &info->downstream, sizeof(downstream));
 	memcpy(&upstream, &info->upstream, sizeof(upstream));
+	
+	
 
 	/* test whether the source address is part og downstream prefix  -> update return path */
 	/* shift address to right (32 - masklen) / 4 */
 	if ( (ip45h->saddr << (32 - info->downstream_len) ) == (downstream << (32 - info->downstream_len)) ) {
-		u_int8_t *s45addr_begin = ip45_addr_begin(&ip45h->s45addr);
 		u_int32_t oldip = ip45h->saddr;
 
-		memcpy(s45addr_begin - shlen , &upstream, sizeof(upstream));
-
+		/* increase smark */
+		ip45h->s45mark += shlen;
+		/* copy shlen bytes from source IP address to the 
+ 		* s45mark position (from the end) to s45stck */
+		memcpy((char *)&ip45h->s45stck + sizeof(ip45h->s45stck) - ip45h->s45mark, 
+				(char *)&ip45h->saddr - shlen , shlen);
 		ip45h->saddr = upstream;
 		csum_replace4(&ip45h->check1, oldip, ip45h->saddr);
+
 	}
 
 	/* test whether the destination address is upstream address 
@@ -106,15 +112,16 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 	*     part (on the mark position) and prefix defined by rule  
  	*/
 	if ( ip45h->daddr == upstream ) {
-		u_int8_t *d45addr = (u_int8_t *)&ip45h->d45addr;
+		u_int8_t *d45stck = (u_int8_t *)&ip45h->d45stck;
 		u_int8_t *daddr = (u_int8_t *)&ip45h->daddr;
 		u_int32_t oldip = ip45h->daddr;
 
-		if (ip45h->dmark > 0)  {
-			// if fwdlen is set to 0 we have already processed all levels of IP45 attache points
-			memcpy(daddr, &downstream, 4 - shlen);
-			memcpy(daddr + 4 - shlen, d45addr + 16 - (int)ip45h->dmark, shlen);
-			ip45h->dmark -= shlen;
+		if (ip45h->d45mark > 0)  {
+			// if dmark is set to 0 we have already processed all levels of IP45 border gateway
+			memcpy(daddr, &downstream, sizeof(daddr) - shlen);
+			memcpy((char *)daddr + sizeof(daddr) - shlen, 
+					d45stck + sizeof(d45stck) - (int)ip45h->d45mark, shlen);
+			ip45h->d45mark -= shlen;
 			csum_replace4(&ip45h->check1, oldip, ip45h->daddr);
 		}
 	}

@@ -4,8 +4,8 @@ supported on kernel >= 2.6.28
 USE
 ====================================================
 
-iptables -t mangle  -I POSTROUTING  -o eth0 -p 155 -j ip45bgw --upstream-addr=78.102.66.182  --downstream-prefix=192.168.1.0/24
-iptables -t mangle  -I PREROUTING  -i eth0 -p 155 -j ip45bgw --upstream-addr=78.102.66.182  --downstream-prefix=192.168.1.0/24
+iptables -t mangle  -I POSTROUTING  -o eth0 --dport 45 -j ip45bgw --upstream-addr=78.102.66.182  --downstream-prefix=192.168.1.0/24
+iptables -t mangle  -I PREROUTING  -i eth0 --dport 45 -j ip45bgw --upstream-addr=78.102.66.182  --downstream-prefix=192.168.1.0/24
 
 
 MANUAL INSTALATION 
@@ -32,6 +32,6 @@ by specyfing NAT rule with a condition to ignore IP45 packets.
 
 Example:
 
-iptables -t nat -A POSTROUTING -o eth1 ! -p 155 -j SNAT --to-source 147.229.240.241
+iptables -t nat -A POSTROUTING -o eth1 ! --dport 45 -j SNAT --to-source 147.229.240.241
 
 

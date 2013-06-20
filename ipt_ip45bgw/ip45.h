@@ -115,7 +115,7 @@ static inline int is_ip45_pkt(const struct ip45hdr *ip45h)
 	return (ip45h->mver == 4 && \
 			ip45h->sver == 5 && \
 			ip45h->protocol == IPPROTO_UDP && \
-			ip45h->ip45dp == IP45_COMPAT_UDP_PORT);
+			ip45h->ip45dp == htons(IP45_COMPAT_UDP_PORT));
 }
 
 

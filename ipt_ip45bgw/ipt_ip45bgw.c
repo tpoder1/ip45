@@ -19,7 +19,7 @@ MODULE_LICENSE("GPL");
 #error "The module is not supported on this kernel. Use >= 2.6.28"
 #endif
 
-#define NIP45FMT "%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d"
+#define NIP45FMT "%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d.%d"
 #define NIP45QUAD(addr) \
     ((unsigned char *)&addr)[0], \
     ((unsigned char *)&addr)[1], \
@@ -32,11 +32,7 @@ MODULE_LICENSE("GPL");
     ((unsigned char *)&addr)[8], \
     ((unsigned char *)&addr)[9], \
     ((unsigned char *)&addr)[10], \
-    ((unsigned char *)&addr)[11], \
-    ((unsigned char *)&addr)[12], \
-    ((unsigned char *)&addr)[13], \
-    ((unsigned char *)&addr)[14], \
-    ((unsigned char *)&addr)[15]
+    ((unsigned char *)&addr)[11]
 
 #define NIPFMT "%d.%d.%d.%d"
 #define NIPQUAD(addr) \
@@ -49,9 +45,10 @@ static void ip45bgw_log(
 	char str[], 
 	struct ip45hdr *ip45h)
 {
-	printk(KERN_INFO "NF IP45: %s " NIPFMT " -> " NIPFMT " [IP45 " NIP45FMT " -> " NIP45FMT "] [SID:%lX] \n", str,
+	printk(KERN_INFO "NF IP45: %s " NIPFMT " -> " NIPFMT " [IP45 " NIP45FMT "/%d -> " NIP45FMT "/%d] [SID:%lX] \n", str,
 			NIPQUAD(ip45h->saddr), NIPQUAD(ip45h->daddr), 
-			NIP45QUAD(ip45h->d45stck), NIP45QUAD(ip45h->s45stck),
+			NIP45QUAD(ip45h->s45stck), ip45h->s45mark,
+			NIP45QUAD(ip45h->d45stck), ip45h->d45mark,
 			(unsigned long)ip45h->sid);
 
 }
@@ -98,13 +95,14 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 		ip45h->s45mark += shlen;
 		/* copy shlen bytes from source IP address to the 
  		* s45mark position (from the end) to s45stck */
-		if (ip45h->s45mark > sizeof(struct in45_stck))  {
+		if (ip45h->s45mark < sizeof(struct in45_stck))  {
 			memcpy((char *)&ip45h->s45stck + sizeof(struct in45_stck) - ip45h->s45mark, 
 					(char *)&ip45h->saddr - shlen , shlen);
 			ip45h->saddr = upstream;
 			csum_replace4(&ip45h->check1, oldip, ip45h->saddr);
 		} else {
-			pr_devel("IP45: s45mark reached the maximum value\n");
+			printk(KERN_ERR "IP45: s45mark reached the maximum value : %d/%d\n", 
+						ip45h->s45mark, sizeof(struct in45_stck));
 			return NF_DROP;
 		}
 

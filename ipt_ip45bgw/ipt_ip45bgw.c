@@ -122,7 +122,7 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 		if (ip45h->d45mark > 0)  {
 			// if dmark is set to 0 we have already processed all levels of IP45 border gateway
 			memcpy(daddr, &downstream, sizeof(daddr) - shlen);
-			memcpy((char *)daddr + sizeof(daddr) - shlen, 
+			memcpy(daddr + sizeof(struct in_addr) - shlen, 
 					d45stck + sizeof(struct in45_stck) - ip45h->d45mark, shlen);
 			ip45h->d45mark -= shlen;
 			csum_replace4(&ip45h->check1, oldip, ip45h->daddr);

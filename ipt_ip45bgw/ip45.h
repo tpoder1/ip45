@@ -4,11 +4,11 @@
 */
 
 #ifndef _NET_IP45_H
-#define _NET_IP45_H "2013-06-20 01"
+#define _NET_IP45_H "2013-06-23 01"
 
 #include <linux/types.h>
 #include <asm/byteorder.h>
-#include <net/inet_sock.h>
+//#include <net/inet_sock.h>
 
 #ifndef IPPROTO_IP45_DEFINED
 enum {
@@ -119,21 +119,6 @@ static inline int is_ip45_pkt(const struct ip45hdr *ip45h)
 }
 
 
-#ifdef __KERNEL__
-#include <linux/skbuff.h>
-
-static inline struct ip45hdr *ip45_hdr(const struct sk_buff *skb)
-{
-	return (struct ip45hdr *)skb_network_header(skb);
-}
-
-static inline int is_ip45(const struct sk_buff *skb)
-{
-	return (ip45_hdr(skb)->mver == 4 && \
-			ip45_hdr(skb)->sver == 5 && \
-			ip45_hdr(skb)->protocol == IPPROTO_UDP && \
-			ip45_hdr(skb)->ip45dp == IP45_COMPAT_UDP_PORT);
-}
 
 /* converts IPv4 and IP45stack address into single IP45 address */
 /* output :  in45 */
@@ -142,18 +127,21 @@ static inline void stck45_to_in45(
 	const struct in45_addr *in45, 
 	const struct in_addr *in, 
 	const struct in45_stck *stck45, 
-	const __u8 *mark) 
+	const __u8 mark) 
 {
 	/* clean ip45 addr */
 	memset((void *)in45, 0, sizeof(struct in45_addr));
 
 	/* IPv4 address part */
-	memcpy((void *)in45 + (sizeof(struct in45_addr) - *mark - sizeof(struct in_addr)), 
+	memcpy((void *)in45 + (sizeof(struct in45_addr) - mark - sizeof(struct in_addr)), 
 			(void *)in, sizeof(struct in_addr));
 
+	if (mark == 0) return;
+
 	/* stack part */
-	memcpy((void *)in45 + (sizeof(struct in45_addr) - *mark), 
-			(void *)stck45, *mark);
+	memcpy((void *)in45 + (sizeof(struct in45_addr) - mark), 
+			(void *)stck45 + (sizeof(struct in45_stck) - mark),
+			 mark);
 }
 
 /* converts IP45 address into  IP45stack address and single IPv4 address */
@@ -176,47 +164,32 @@ static inline __u8 in45_to_stck45(
 
 	/* cleanup and set stack part */
 	memset((void *)stck45, 0, sizeof(struct in45_stck));
+
+	if (mark == 0) return 0;
+
 	memcpy((void *)stck45 + (sizeof(struct in45_stck) - mark), 
 			bgn + sizeof(struct in_addr),  mark);
 
 	return mark;
 }
 
+#ifdef __KERNEL__
+#include <linux/skbuff.h>
 
-struct cdp_sock {
-    /* inet_sock has to be the first member */
-    struct inet_sock inet;
-    int      pending;   /* Any pending frames ? */
-    unsigned int     corkflag;  /* Cork is required */
-    __u16        encap_type;    /* Is this an Encapsulation socket? */
-    /*
- *      * Following member retains the information to create a UDP header
- *           * when the socket is uncorked.
- *                */
-    __u16        len;       /* total length of pending frames */
-    /*
- *      * Fields specific to UDP-Lite.
- *           */
-    __u16        pcslen;
-    __u16        pcrlen;
-/* indicator bits used by pcflag: */
-    __u8         pcflag;        /* marks socket as UDP-Lite if > 0    */
-    __u8         unused[3];
-    /*
- *      * For encapsulation sockets.
- *           */
-    int (*encap_rcv)(struct sock *sk, struct sk_buff *skb);
-};
-
-static inline struct cdp_sock *cdp_sk(const struct sock *sk)
+static inline struct ip45hdr *ip45_hdr(const struct sk_buff *skb)
 {
-    return (struct cdp_sock *)sk;
+	return (struct ip45hdr *)skb_network_header(skb);
 }
 
+static inline int is_ip45_skb(const struct sk_buff *skb)
+{
+	return (ip45_hdr(skb)->mver == 4 && \
+			ip45_hdr(skb)->sver == 5 && \
+			ip45_hdr(skb)->protocol == IPPROTO_UDP && \
+			ip45_hdr(skb)->ip45dp == htons(IP45_COMPAT_UDP_PORT));
+}
 
-
-
-#endif
+#endif	/* __LERNEL__ */
 
 #endif	/* _NET_IP45_H */
 

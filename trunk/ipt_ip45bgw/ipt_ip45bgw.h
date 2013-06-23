@@ -15,8 +15,8 @@
 #define IPT_IP45_OPT_LOG   0x04
 
 struct ipt_ip45bgw_info {
-	struct in_addr		upstream;			/* The external - upstream IP adress */
-	struct in_addr		downstream;			/* The internal - downstream network address  */
+	u_int32_t		upstream;			/* The external - upstream IP adress */
+	u_int32_t		downstream;			/* The internal - downstream network address  */
 	u_int16_t		downstream_len;	/* The internal prefix length */
 	u_int16_t   	ip45flags;		/* Some flags */
 };

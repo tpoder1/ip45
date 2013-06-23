@@ -60,7 +60,7 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 #endif
 	struct ip45hdr *ip45h = (struct ip45hdr *)ip_hdr(skb);
 	const struct ipt_ip45bgw_info *info = (struct ipt_ip45bgw_info *)par->targinfo;
-	u_int32_t downstream, upstream;
+//	u_int32_t downstream, upstream;
 	int shlen = (32 - info->downstream_len) / 8; /* number of octets to shift */
 	int log = IPT_IP45_OPT_LOG & info->ip45flags;
 
@@ -81,28 +81,28 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 		ip45bgw_log("INPUT", ip45h);
 	}
 	
-	memcpy(&downstream, &info->downstream, sizeof(downstream));
-	memcpy(&upstream, &info->upstream, sizeof(upstream));
-	
+//	memcpy(&downstream, &info->downstream, sizeof(downstream));
+//	memcpy(&upstream, &info->upstream, sizeof(upstream));
 	
 
 	/* test whether the source address is part og downstream prefix  -> update return path */
 	/* shift address to right (32 - masklen) / 4 */
-	if ( (ip45h->saddr << (32 - info->downstream_len) ) == (downstream << (32 - info->downstream_len)) ) {
+	if ( (ip45h->saddr << shlen * 8) == (info->downstream << shlen * 8) ) {
 		u_int32_t oldip = ip45h->saddr;
 
 		/* increase smark */
 		ip45h->s45mark += shlen;
 		/* copy shlen bytes from source IP address to the 
  		* s45mark position (from the end) to s45stck */
+
 		if (ip45h->s45mark < sizeof(struct in45_stck))  {
 			memcpy((char *)&ip45h->s45stck + sizeof(struct in45_stck) - ip45h->s45mark, 
-					(char *)&ip45h->saddr - shlen , shlen);
-			ip45h->saddr = upstream;
+					(char *)&ip45h->saddr + sizeof(struct in_addr) - shlen , shlen);
+			memcpy(&ip45h->saddr, &info->upstream, sizeof(struct in_addr));
 			csum_replace4(&ip45h->check1, oldip, ip45h->saddr);
 		} else {
 			printk(KERN_ERR "IP45: s45mark reached the maximum value : %d/%d\n", 
-						ip45h->s45mark, sizeof(struct in45_stck));
+						(int)ip45h->s45mark, (int)sizeof(struct in45_stck));
 			return NF_DROP;
 		}
 
@@ -114,16 +114,14 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 	*  -> update destination addr by assebling from ip45 
 	*     part (on the mark position) and prefix defined by rule  
  	*/
-	if ( ip45h->daddr == upstream ) {
-		u_int8_t *d45stck = (u_int8_t *)&ip45h->d45stck;
-		u_int8_t *daddr = (u_int8_t *)&ip45h->daddr;
+	if ( ip45h->daddr == info->upstream ) {
 		u_int32_t oldip = ip45h->daddr;
 
 		if (ip45h->d45mark > 0)  {
 			// if dmark is set to 0 we have already processed all levels of IP45 border gateway
-			memcpy(daddr, &downstream, sizeof(struct in_addr) - shlen);
-			memcpy(daddr + sizeof(struct in_addr) - shlen, 
-					d45stck + sizeof(struct in45_stck) - ip45h->d45mark, shlen);
+			memcpy(&ip45h->daddr, &info->downstream, sizeof(struct in_addr) - shlen);
+			memcpy((char *)&ip45h->daddr + sizeof(struct in_addr) - shlen, 
+					(char *)&ip45h->d45stck + sizeof(struct in45_stck) - ip45h->d45mark, shlen);
 			ip45h->d45mark -= shlen;
 			csum_replace4(&ip45h->check1, oldip, ip45h->daddr);
 		}
@@ -143,6 +141,7 @@ static bool ip45bgw_tg_check(const struct xt_tgchk_param *par) {
 		printk("IP45: you must specify both --" IPT_IP45_DOWNSTREAM " and --" IPT_IP45_UPSTREAM "\n");
 		return false;
     }
+
 	return true;
 }
 

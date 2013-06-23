@@ -79,7 +79,7 @@ static int ip45bgw_parse(
             }
 
 			*p = '\0';
-			if (inet_aton(optarg, &info->downstream) != 1) {
+			if (inet_aton(optarg, (void *)&info->downstream) != 1) {
 				xtables_error(PARAMETER_PROBLEM, "Invalid IP address in --" IPT_IP45_DOWNSTREAM ": \"%s\"", optarg);
 			}
 

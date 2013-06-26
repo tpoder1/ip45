@@ -11,6 +11,7 @@ struct session_entry_t  {
 	uint64_t init_d45addr[2];
 	uint64_t last_s45addr[2];
 	uint64_t last_d45addr[2];
+	uint16_t last_45port;
 	uint8_t proto;
 	uint16_t sport;
 	uint16_t dport;

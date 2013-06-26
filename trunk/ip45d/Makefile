@@ -2,7 +2,7 @@
 distdir = ip45d-0.1
 
 main:
-	gcc -lpcap -pthread -O3 -Wall -o ip45d ip45d.c inet_ntop45.c tun.c
+	gcc -lpcap -pthread -O3 -Wall -o ip45d ip45d.c inet_ntop45.c  session_table.c
 
 clean:
 	rm ip45d

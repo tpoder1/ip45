@@ -123,6 +123,7 @@ ssize_t ip45_to_ipv6(char *ip45pkt, ssize_t len45, char *ip6pkt) {
 	struct ip6_hdr *ip6h = (struct ip6_hdr *)ip6pkt;
 	char *ip45data = ip45pkt + sizeof(struct ip45hdr);
 	char *ip6data = ip6pkt + sizeof(struct ip6_hdr);
+	struct in45_addr s45addr, d45addr;
 	ssize_t datalen;
 	uint16_t sport = 0;
 	uint16_t dport = 0;
@@ -131,7 +132,7 @@ ssize_t ip45_to_ipv6(char *ip45pkt, ssize_t len45, char *ip6pkt) {
 
 
 	/* check version */
-	if (ip45h->mver != 4 || ip45h->sver != 5 || ip45h->protocol != IPPROTO_IP45) {
+	if ( !is_ip45_pkt(ip45h) ) {
 		DEBUG("IP45: invalid IP45 packet mver, sver or ptotcol\n");
 		return -1;
 	}
@@ -151,6 +152,9 @@ ssize_t ip45_to_ipv6(char *ip45pkt, ssize_t len45, char *ip6pkt) {
 	}
 	datalen = len45 - sizeof(struct ip45hdr);
 
+	/* get source and destination IP45 address from the packet */
+	stck45_to_in45(&s45addr, (void *)&ip45h->saddr, &ip45h->s45stck, ip45h->s45mark);
+	stck45_to_in45(&d45addr, (void *)&ip45h->daddr, &ip45h->d45stck, ip45h->d45mark);
 
 	/* prepare IPv6 packet */
 	memset(ip6h, 0, sizeof(struct ip6_hdr));
@@ -166,15 +170,17 @@ ssize_t ip45_to_ipv6(char *ip45pkt, ssize_t len45, char *ip6pkt) {
 	if (ses_rec == NULL) {	/* the session not seen before */
 		struct session_entry_t tmp;
 
-		memcpy(&tmp.init_s45addr, &ip45h->s45addr, sizeof(ip45h->s45addr));
+		memcpy(&tmp.init_s45addr, &s45addr, sizeof(struct in45_addr));
 /*		memcpy(&tmp.init_d45addr, &ip45h->s45addr, sizeof(ip45h->d45addr)); */
 		tmp.proto = ip45h->nexthdr;
 		tmp.sid = ip45h->sid;
+		tmp.last_45port = ip45h->ip45sp;
 		ses_rec = session_table_add(&sessions, &tmp);
 		DEBUG("New remote session sid:%lx\n", (unsigned long)ip45h->sid);
 	}
 
-	memcpy(&ses_rec->last_s45addr, &ip45h->s45addr, sizeof(ip45h->s45addr));
+	memcpy(&ses_rec->last_s45addr, &s45addr, sizeof(struct in45_addr));
+	ses_rec->last_45port = ntohs(ip45h->ip45sp);
 /*	memcpy(&ses_rec->last_d45addr, &ip45h->d45addr, sizeof(ip45h->s45addr)); */
 
 	/* src, dst address */
@@ -223,7 +229,6 @@ ssize_t ip45_to_ipv6(char *ip45pkt, ssize_t len45, char *ip6pkt) {
 				
 	}
 
-	/* store the sit into hash table */
 	ses_rec->sport = sport;
 	ses_rec->dport = dport;
 
@@ -302,6 +307,7 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt) {
 		tmp.sport = dport;
 		tmp.dport = sport;
 		tmp.sid = rand();
+		tmp.last_45port = IP45_COMPAT_UDP_PORT;
 		ses_rec = session_table_add(&sessions, &tmp);
 		DEBUG("new sid %lx created\n", (unsigned long)tmp.sid);
 	}
@@ -327,28 +333,34 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt) {
 
 	ip45h->mver = 4;
 	ip45h->sver = 5;
-	ip45h->protocol = IPPROTO_IP45;
+	ip45h->protocol = IPPROTO_UDP;
 	ip45h->nexthdr = ip6h->ip6_nxt;		/* next header */
 	ip45h->sid = ses_rec->sid;
+	ip45h->ip45sp = htons(IP45_COMPAT_UDP_PORT);
+	ip45h->ip45dp = htons(ses_rec->last_45port);
 //	memset(&ip45h->s45addr, 0x0, sizeof(ip45h->d45addr));
 	ip45h->saddr = (uint32_t)source_v4_address.s_addr;
 
-	/* copy src addr to last 32bytes of src45 addr */
+	/* create dst IPv4 IP45stck address and d45mark  */
+	ip45h->d45mark = in45_to_stck45((void *)&ip45h->daddr, &ip45h->d45stck, (void *)&ses_rec->last_s45addr);
+/*
 	memcpy((char *)&ip45h->s45addr + sizeof(ip45h->s45addr) - sizeof(ip45h->saddr), 
 			(char *)&ip45h->saddr, sizeof(ip45h->saddr));
-	//memcpy(&ip45h->d45addr, &ip6h->ip6_dst, sizeof(ip45h->d45addr)); 
 	memcpy(&ip45h->d45addr, &ses_rec->last_s45addr, sizeof(ip45h->d45addr)); 
-	memcpy(&ip45h->daddr, 				/* copy first non 0 32 bytes from src addr */
-			ip45_addr_begin(&ip45h->d45addr), sizeof(ip45h->daddr));
+	memcpy(&ip45h->daddr, 	*/			/* copy first non 0 32 bytes from src addr */
+//			ip45_addr_begin(&ip45h->d45addr), sizeof(ip45h->daddr));
+
 	ip45h->ttl = htons(ntohs(ip6h->ip6_hlim) - 1);	/*  hop limit */ 
 
 
-	ip45h->tot_len = ntohs(datalen + sizeof(struct ip45hdr));
+	ip45h->tot_len = htons(datalen + sizeof(struct ip45hdr));
+	ip45h->ip45le = htons(datalen + sizeof(struct ip45hdr) - 20);
 #ifdef __APPLE__
 	/* BSD requires it in host order Linux not */
-	ip45h->tot_len = htons(ip45h->tot_len);
+	ip45h->tot_len = ntohs(ip45h->tot_len);
 #endif
-	ip45h->dmark = 12 - (ip45_addr_begin(&ip45h->d45addr) - (void *)&ip45h->d45addr);
+
+//	ip45h->d45mark = 12 - (ip45_addr_begin(&ip45h->d45addr) - (void *)&ip45h->d45addr);
 //	ip45h->check1 = inet_cksum(ip45h, 5);
 //	ip45h->check1 = inet_cksum(ip45h, sizeof(struct iphdr));
 //	ip45h->check2 = inet_cksum(ip45h, sizeof(struct ip45hdr));
@@ -417,9 +429,12 @@ int tun_alloc(char *dev) {
 int init_sock() {
 
 	int sock;
+	struct sockaddr_in ls; 
 	int yes = 1;
 
-	if ((sock=socket(AF_INET,SOCK_RAW,IPPROTO_IP45)) < 0) {   
+	//if ((sock=socket(AF_INET,SOCK_RAW,IPPROTO_IP45)) < 0) {   
+	if ((sock=socket(AF_INET, SOCK_RAW, IPPROTO_UDP)) < 0) {   
+	//if ((sock=socket(AF_INET, SOCK_DGRAM, 0)) < 0) {   
 		perror("snd_sock socket");
 		return -1;
 	}
@@ -429,6 +444,16 @@ int init_sock() {
 		return -1;	
 	}
 
+
+	bzero(&ls, sizeof(struct sockaddr_in));
+	ls.sin_family = AF_INET;
+	ls.sin_addr.s_addr = INADDR_ANY;
+	ls.sin_port = htons(IP45_COMPAT_UDP_PORT);
+	if (bind(sock, (struct sockaddr *)&ls, sizeof(struct sockaddr_in)) < 0 ) {
+		perror("bind"); 
+		return -1;
+	}
+	
 	return sock;
 }
 
@@ -445,6 +470,7 @@ int main(int argc, char *argv[]) {
 //	struct ip6_hdr *ip6h = (struct ip6_hdr *)(buf6 + sizeof(struct null_hdr));
 	struct ip6_hdr *ip6h = (struct ip6_hdr *)buf6;
 	struct ip45hdr *ip45h = (struct ip45hdr *)buf45;
+	struct in45_addr s45addr, d45addr;
 	char saddr[IP45_ADDR_LEN];
 	char daddr[IP45_ADDR_LEN];
 	char op;
@@ -531,8 +557,10 @@ int main(int argc, char *argv[]) {
 			/* valid IP45 packet */
 			ip45h = (struct ip45hdr *)buf45;
 
-			inet_ntop45((char *)&ip45h->s45addr, saddr, IP45_ADDR_LEN);
-			inet_ntop45((char *)&ip45h->d45addr, daddr, IP45_ADDR_LEN);
+			stck45_to_in45(&s45addr, (void *)&ip45h->saddr, &ip45h->s45stck, ip45h->s45mark);
+			stck45_to_in45(&d45addr, (void *)&ip45h->daddr, &ip45h->d45stck, ip45h->d45mark);
+			inet_ntop45((char *)&s45addr, saddr, IP45_ADDR_LEN);
+			inet_ntop45((char *)&d45addr, daddr, IP45_ADDR_LEN);
 		
 			DEBUG("Received IP45 packet %s->%s, sid=%016lx, proto=%d\n", 
 				saddr, daddr, 

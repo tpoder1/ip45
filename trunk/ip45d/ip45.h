@@ -4,10 +4,12 @@
 */
 
 #ifndef _NET_IP45_H
-#define _NET_IP45_H "2013-06-23 01"
+#define _NET_IP45_H "2013-06-27 01"
 
+/*
 #include <linux/types.h>
 #include <asm/byteorder.h>
+*/
 //#include <net/inet_sock.h>
 
 #ifndef IPPROTO_IP45_DEFINED
@@ -25,9 +27,9 @@ struct in45_addr
 {
     union
     {
-        __u8        u45_addr8[16];
-        __be16      u45_addr16[8];
-        __be32      u45_addr32[4];
+        uint8_t       u45_addr8[16];
+        uint16_t      u45_addr16[8];
+        uint32_t      u45_addr32[4];
     } in45_u;
 #define s45_addr         in45_u.u45_addr8
 #define s45_addr16       in45_u.u45_addr16
@@ -39,9 +41,9 @@ struct in45_stck
 {
     union
     {
-        __u8        u45_stck8[12];
-        __be16      u45_stck16[6];
-        __be32      u45_stck32[3];
+        uint8_t       u45_stck8[12];
+        uint16_t      u45_stck16[6];
+        uint32_t      u45_stck32[3];
     } in45s_u;
 #define s45_stck         in45s_u.u45_stck8
 #define s45_stck16       in45s_u.u45_stck16
@@ -50,50 +52,50 @@ struct in45_stck
 
 /* IP45 header (standart IP header with no options + extra IP45 header */
 struct ip45hdr {
-#if defined(__LITTLE_ENDIAN_BITFIELD)
-	__u8	sver:4,					/* sub version, always set to 5 */
+#if defined(__LITTLE_ENDIAN__)
+	uint8_t	sver:4,					/* sub version, always set to 5 */
 			mver:4;					/* major version, always set to 4 */
-#elif defined (__BIG_ENDIAN_BITFIELD)
-	__u8	mver:4,
+#elif defined (__BIG_ENDIAN__)
+	uint8_t	mver:4,
  			sver:4;	
 #else
-#error	"Please fix <asm/byteorder.h>"
+#error	"Byte order not detected"
 #endif
-	__u8	tos;	
-	__be16	tot_len;
-	__be16	id;
-	__be16	frag_off;
-	__u8	ttl;
-	__u8	protocol;	/* have to always be set to IPPROTO_UDP */ 
-	__sum16	check1;
-	__be32	saddr;
-	__be32	daddr;
+	uint8_t	tos;	
+	uint16_t	tot_len;
+	uint16_t	id;
+	uint16_t	frag_off;
+	uint8_t	ttl;
+	uint8_t	protocol;	/* have to always be set to IPPROTO_UDP */ 
+	uint16_t	check1;
+	uint32_t	saddr;
+	uint32_t	daddr;
 	/* compatibility header for UDP */
-	__be16  ip45sp;		// 45
-	__be16  ip45dp;		// 45
-	__be16  ip45le;		// XX
-	__be16  ip45ze;		// zeros 
+	uint16_t  ip45sp;		// 45
+	uint16_t  ip45dp;		// 45
+	uint16_t  ip45le;		// XX
+	uint16_t  ip45ze;		// zeros 
 	/* extended header for IP4.5 is presented here */
-	__u8	nexthdr;
-#if defined(__LITTLE_ENDIAN_BITFIELD)
-	__u8	d45mark:4,
+	uint8_t	nexthdr;
+#if defined(__LITTLE_ENDIAN__)
+	uint8_t	d45mark:4,
 			s45mark:4;
-#elif defined (__BIG_ENDIAN_BITFIELD)
-	__u8	s45mark:4,
+#elif defined (__BIG_ENDIAN__)
+	uint8_t	s45mark:4,
 	  		d45mark:4;				
 #else
-#error	"Please fix <asm/byteorder.h>"
+#error	"Byte order not detected"
 #endif
-	__sum16	check45;
+	uint16_t	check45;
 	struct in45_stck	s45stck;
 	struct in45_stck	d45stck;
-	__be64	sid;  
+	uint64_t	sid;  
 	/* no IP options allowed in IP4.5 */
 };
 
 struct sockaddr_in45 {
 	sa_family_t			sin45_family;	/* Address family		*/
-	__be16				sin45_port;		/* Port number			*/
+	uint16_t				sin45_port;		/* Port number			*/
 	struct in45_addr	sin45_addr;
 
 };
@@ -101,10 +103,10 @@ struct sockaddr_in45 {
 /* return the pointer to the begin of the IP address (find first non 0 octet)*/
 static inline void *ip45_addr_begin(const struct in45_addr *addr)
 {
-	__u8 *p;
+	uint8_t *p;
 
-	for (p = (__u8 *)addr; p - (__u8*)addr < sizeof(struct in45_addr) - sizeof(__be32); p++) {
-		if ((__u8)*p != 0x0) break;
+	for (p = (uint8_t *)addr; p - (uint8_t*)addr < sizeof(struct in45_addr) - sizeof(uint32_t); p++) {
+		if ((uint8_t)*p != 0x0) break;
 	}
 	return p;
 }
@@ -127,7 +129,7 @@ static inline void stck45_to_in45(
 	const struct in45_addr *in45, 
 	const struct in_addr *in, 
 	const struct in45_stck *stck45, 
-	const __u8 mark) 
+	const uint8_t mark) 
 {
 	/* clean ip45 addr */
 	memset((void *)in45, 0, sizeof(struct in45_addr));
@@ -147,7 +149,7 @@ static inline void stck45_to_in45(
 /* converts IP45 address into  IP45stack address and single IPv4 address */
 /* output :  in, stck45, mark (return value)*/
 /* input:    in45 */
-static inline __u8 in45_to_stck45(
+static inline uint8_t in45_to_stck45(
 	const struct in_addr *in, 
 	const struct in45_stck *stck45, 
 	const struct in45_addr *in45) 
@@ -157,7 +159,7 @@ static inline __u8 in45_to_stck45(
 	void *bgn = ip45_addr_begin((void *)in45);
 
 	/* get mark */
-	__u8 mark = 12 - (bgn - (void *)in45);
+	uint8_t mark = 12 - (bgn - (void *)in45);
 
 	/* IPv4 address part */
 	memcpy((void *)in, bgn, sizeof(struct in_addr));

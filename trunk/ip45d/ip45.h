@@ -4,7 +4,17 @@
 */
 
 #ifndef _NET_IP45_H
-#define _NET_IP45_H "2013-06-27 01"
+#define _NET_IP45_H "2013-06-27 02"
+
+#ifdef linux 
+#include <endian.h>
+#ifdef __LITTLE_ENDIAN
+#define __LITTLE_ENDIAN__
+#endif
+#ifdef __BIG_ENDIAN
+#define __BIG_ENDIAN__
+#endif
+#endif
 
 /*
 #include <linux/types.h>
@@ -117,7 +127,8 @@ static inline int is_ip45_pkt(const struct ip45hdr *ip45h)
 	return (ip45h->mver == 4 && \
 			ip45h->sver == 5 && \
 			ip45h->protocol == IPPROTO_UDP && \
-			ip45h->ip45dp == htons(IP45_COMPAT_UDP_PORT));
+			( ip45h->ip45dp == htons(IP45_COMPAT_UDP_PORT) || 
+			ip45h->ip45dp == htons(IP45_COMPAT_UDP_PORT)) );
 }
 
 

@@ -117,7 +117,7 @@ int len;
 
 /* process IP45 packet and prepare it as IPv6 packet*/
 /* !1 - we expect that ipv6 buffer is big enough to handle data */
-ssize_t ip45_to_ipv6(char *ip45pkt, ssize_t len45, char *ip6pkt) {
+ssize_t ip45_to_ipv6(struct sockaddr_in *peer45_addr, char *ip45pkt, ssize_t len45, char *ip6pkt) {
 
 	struct ip45hdr *ip45h = (struct ip45hdr *)ip45pkt;
 	struct ip6_hdr *ip6h = (struct ip6_hdr *)ip6pkt;
@@ -246,7 +246,7 @@ ssize_t ip45_to_ipv6(char *ip45pkt, ssize_t len45, char *ip6pkt) {
 
 /* process IPv6 packet and prepare it as IP45 packet*/
 /* !1 - we expect that ipv6 buffer is big enough to handle data */
-ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt) {
+ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt, struct sockaddr_in *peer45_addr) {
 	struct ip45hdr *ip45h = (struct ip45hdr *)ip45pkt;
 	struct ip6_hdr *ip6h = (struct ip6_hdr *)ip6pkt;
 	char *ip45data = ip45pkt + sizeof(struct ip45hdr);
@@ -432,23 +432,25 @@ int init_sock() {
 	struct sockaddr_in ls; 
 	int yes = 1;
 
-	//if ((sock=socket(AF_INET,SOCK_RAW,IPPROTO_IP45)) < 0) {   
-	if ((sock=socket(AF_INET, SOCK_RAW, IPPROTO_UDP)) < 0) {   
-	//if ((sock=socket(AF_INET, SOCK_DGRAM, 0)) < 0) {   
+//	if ((sock=socket(AF_INET, SOCK_RAW, IPPROTO_UDP)) < 0) {   
+	if ((sock=socket(AF_INET, SOCK_DGRAM, 0)) < 0) {   
 		perror("snd_sock socket");
 		return -1;
 	}
 
+/*
 	if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL,(char *)&yes, sizeof(yes)) < 0 ) {
 		perror("setsockopt IP_HDRINCL");
 		return -1;	
 	}
+*/
 
 
 	bzero(&ls, sizeof(struct sockaddr_in));
 	ls.sin_family = AF_INET;
 	ls.sin_addr.s_addr = INADDR_ANY;
 	ls.sin_port = htons(IP45_COMPAT_UDP_PORT);
+	//ls.sin_port = IP45_COMPAT_UDP_PORT;
 	if (bind(sock, (struct sockaddr *)&ls, sizeof(struct sockaddr_in)) < 0 ) {
 		perror("bind"); 
 		return -1;
@@ -475,7 +477,7 @@ int main(int argc, char *argv[]) {
 	char daddr[IP45_ADDR_LEN];
 	char op;
 	int tunfd, sockfd, maxfd;
-	struct sockaddr_in dst_addr;
+	struct sockaddr_in peer_addr;
 	ssize_t len;
 
 	source_v4_address.s_addr = 0x0;
@@ -542,12 +544,13 @@ int main(int argc, char *argv[]) {
 		if ( FD_ISSET(sockfd, &rd_set) ) {
 			/* IP45 received */
 
-			if ( (len = recv(sockfd, buf45, sizeof(buf45), 0)) <= 0 ) {
+			if ( (len = recvfrom(sockfd, buf45, sizeof(buf45), 0, 
+					peer45_addr, sizoef(struct sockaddr_in)) <= 0 ) {
 				perror("recv: ");
 				continue;
 			}
 
-			len = ip45_to_ipv6(buf45, len, (char *)ip6h);
+			len = ip45_to_ipv6(&peer45_addr, buf45, len, (char *)ip6h);
 
 			if (len <= 0 ) {
 				LOG("Invalid IP45 packet\n");
@@ -590,7 +593,7 @@ int main(int argc, char *argv[]) {
 				continue;
 			}
 
-			len = ipv6_to_ip45(buf6, len, buf45);
+			len = ipv6_to_ip45(buf6, len, buf45, &peer45_addr);
 
 			if (len <= 0 ) {
 				LOG("Invalid IPv6 packet\n");
@@ -604,13 +607,15 @@ int main(int argc, char *argv[]) {
 					ip6h->ip6_nxt, (int)len);
 
 			/* prepare dst addr */
+			/*
 			memset(&dst_addr, 0x0, sizeof(dst_addr));
 			dst_addr.sin_family = AF_INET;
 			dst_addr.sin_addr.s_addr = ip45h->daddr;
 			dst_addr.sin_port = htons(0);
+			*/
 
 			len = sendto(sockfd, buf45, len, 0, 
-				(struct sockaddr*)&dst_addr, sizeof(dst_addr) );
+				(struct sockaddr*)&peer45_addr, sizeof(struct sockaddr_in) );
 			if ( len < 0 ) {
 				perror("send sockfd");
 			}

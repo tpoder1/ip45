@@ -4,7 +4,7 @@
 */
 
 #ifndef _NET_IP45_H
-#define _NET_IP45_H "2013-06-27 02"
+#define _NET_IP45_H "2013-07-02 01"
 
 #ifdef linux 
 #include <endian.h>
@@ -86,6 +86,25 @@ struct ip45hdr {
 	uint16_t  ip45le;		// XX
 	uint16_t  ip45ze;		// zeros 
 	/* extended header for IP4.5 is presented here */
+	uint8_t	nexthdr;
+#if defined(__LITTLE_ENDIAN__)
+	uint8_t	d45mark:4,
+			s45mark:4;
+#elif defined (__BIG_ENDIAN__)
+	uint8_t	s45mark:4,
+	  		d45mark:4;				
+#else
+#error	"Byte order not detected"
+#endif
+	uint16_t	check45;
+	struct in45_stck	s45stck;
+	struct in45_stck	d45stck;
+	uint64_t	sid;  
+	/* no IP options allowed in IP4.5 */
+};
+
+/* IP45 without p1 and p2 part (IP, UDP) */
+struct ip45hdr_p3 {
 	uint8_t	nexthdr;
 #if defined(__LITTLE_ENDIAN__)
 	uint8_t	d45mark:4,

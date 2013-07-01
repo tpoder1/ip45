@@ -103,6 +103,8 @@ struct ip45hdr {
 	/* no IP options allowed in IP4.5 */
 };
 
+#pragma pack(push, 1)
+
 /* IP45 without p1 and p2 part (IP, UDP) */
 struct ip45hdr_p3 {
 	uint8_t	nexthdr;
@@ -121,6 +123,8 @@ struct ip45hdr_p3 {
 	uint64_t	sid;  
 	/* no IP options allowed in IP4.5 */
 };
+
+#pragma pack(pop)
 
 struct sockaddr_in45 {
 	sa_family_t			sin45_family;	/* Address family		*/

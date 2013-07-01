@@ -154,7 +154,7 @@ ssize_t ip45_to_ipv6(struct sockaddr_in *peer45_addr, char *ip45pkt, ssize_t len
 		return -1;
 	}
 */
-	datalen = len45 - sizeof(struct ip45hdr);
+	datalen = len45 - sizeof(struct ip45hdr_p3);
 
 	/* get source and destination IP45 address from the packet */
 	stck45_to_in45(&s45addr, &peer45_addr->sin_addr, &ip45h->s45stck, ip45h->s45mark);
@@ -180,13 +180,13 @@ ssize_t ip45_to_ipv6(struct sockaddr_in *peer45_addr, char *ip45pkt, ssize_t len
 		tmp.proto = ip45h->nexthdr;
 		tmp.sid = ip45h->sid;
 		//tmp.last_45port = ip45h->ip45sp;
-		tmp.last_45port = peer45_addr->sin_port;
+		tmp.last_45port = ntohs(peer45_addr->sin_port);
 		ses_rec = session_table_add(&sessions, &tmp);
 		DEBUG("New remote session sid:%lx\n", (unsigned long)ip45h->sid);
 	}
 
 	memcpy(&ses_rec->last_s45addr, &s45addr, sizeof(struct in45_addr));
-	ses_rec->last_45port = peer45_addr->sin_port;
+	ses_rec->last_45port = ntohs(peer45_addr->sin_port);
 	//ses_rec->last_45port = ntohs(ip45h->ip45sp);
 /*	memcpy(&ses_rec->last_d45addr, &ip45h->d45addr, sizeof(ip45h->s45addr)); */
 
@@ -322,6 +322,9 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt, struct sockaddr_
 	/* create IP45 header */
 	memset(ip45h, 0x0, sizeof(struct ip45hdr_p3));
 
+
+
+
 	/* find the sid into hash table  */
 /*	sid_hash = 0;
 	sid_hash += inet_cksum(&ip6h->ip6_dst, sizeof(ip6h->ip6_dst));
@@ -347,7 +350,7 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt, struct sockaddr_
 //	ip45h->ip45sp = htons(IP45_COMPAT_UDP_PORT);
 //	ip45h->ip45dp = htons(ses_rec->last_45port);
 	peer45_addr->sin_family = AF_INET;
-	peer45_addr->sin_port = ses_rec->last_45port;
+	peer45_addr->sin_port = htons(ses_rec->last_45port);
 //	memset(&ip45h->s45addr, 0x0, sizeof(ip45h->d45addr));
 //	ip45h->saddr = (uint32_t)source_v4_address.s_addr;
 
@@ -379,7 +382,7 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt, struct sockaddr_
 	/* copy data to the new buffer */
 	memcpy(ip45data, ip6data, datalen);
 
-	return datalen + sizeof(struct ip45hdr);
+	return datalen + sizeof(struct ip45hdr_p3);
 }
 
 
@@ -625,6 +628,7 @@ int main(int argc, char *argv[]) {
 			dst_addr.sin_addr.s_addr = ip45h->daddr;
 			dst_addr.sin_port = htons(0);
 			*/
+
 
 			len = sendto(sockfd, buf45, len, 0, 
 				(struct sockaddr*)&peer45_addr, sizeof(struct sockaddr_in) );

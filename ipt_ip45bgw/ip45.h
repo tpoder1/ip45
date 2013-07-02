@@ -4,10 +4,13 @@
 */
 
 #ifndef _NET_IP45_H
-#define _NET_IP45_H "2013-06-27 02"
+#define _NET_IP45_H "2013-06-27 03"
 
 #ifdef linux 
-#include <endian.h>
+#include <linux/types.h>
+#include <asm/byteorder.h>
+//#include <net/inet_sock.h>
+//#include <endian.h>
 #ifdef __LITTLE_ENDIAN
 #define __LITTLE_ENDIAN__
 #endif
@@ -16,11 +19,6 @@
 #endif
 #endif
 
-/*
-#include <linux/types.h>
-#include <asm/byteorder.h>
-*/
-//#include <net/inet_sock.h>
 
 #ifndef IPPROTO_IP45_DEFINED
 enum {

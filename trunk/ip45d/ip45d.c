@@ -367,7 +367,9 @@ int init_sock() {
 
 	int sock;
 	struct sockaddr_in ls; 
+#ifdef __linux
 	int yes = 1;
+#endif
 
 //	if ((sock=socket(AF_INET, SOCK_RAW, IPPROTO_UDP)) < 0) {   
 	if ((sock=socket(AF_INET, SOCK_DGRAM, 0)) < 0) {   
@@ -375,10 +377,12 @@ int init_sock() {
 		return -1;
 	}
 
+#ifdef __linux
 	if (setsockopt(sock, IPPROTO_IP, SO_NO_CHECK,(char *)&yes, sizeof(yes)) < 0 ) {
 		perror("setsockopt SO_NO_CHECK");
 		return -1;	
 	}
+#endif
 
 /*
 	if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL,(char *)&yes, sizeof(yes)) < 0 ) {

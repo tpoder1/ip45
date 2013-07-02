@@ -127,33 +127,9 @@ ssize_t ip45_to_ipv6(struct sockaddr_in *peer45_addr, char *ip45pkt, ssize_t len
 	ssize_t datalen;
 	uint16_t sport = 0;
 	uint16_t dport = 0;
-//	uint16_t sid_hash = 0;
 	struct session_entry_t *ses_rec;
 
 
-	/* check version */
-	/*
-	if ( !is_ip45_pkt(ip45h) ) {
-		DEBUG("IP45: invalid IP45 packet mver, sver or ptotcol\n");
-		return -1;
-	}
-	*/
-
-	/* check received len */
-#ifdef __APPLE__
-	/* some platforms have update value of tot_len in IP header */
-	/* and decrases the number of byted of IP header size */	
-	/* we have to ajust the value here */
-//	ip45h->tot_len += 20;
-//	ip45h->tot_len = ntohs(ip45h->tot_len);
-#endif
-
-/*
-	if ( len45 != htons(ip45h->tot_len) ) {
-		DEBUG("IP45: invalid IP45 packet length\n");
-		return -1;
-	}
-*/
 	datalen = len45 - sizeof(struct ip45hdr_p3);
 
 	/* get source and destination IP45 address from the packet */
@@ -176,10 +152,13 @@ ssize_t ip45_to_ipv6(struct sockaddr_in *peer45_addr, char *ip45pkt, ssize_t len
 		struct session_entry_t tmp;
 
 		memcpy(&tmp.init_s45addr, &s45addr, sizeof(struct in45_addr));
-/*		memcpy(&tmp.init_d45addr, &ip45h->s45addr, sizeof(ip45h->d45addr)); */
+		/* some system do not accept ::a.b.c.d address so we have to help wit that */
+		if (ip45h->s45mark == 0) {
+			((char *)&tmp.init_s45addr)[10] = 0xF;
+		}
+
 		tmp.proto = ip45h->nexthdr;
 		tmp.sid = ip45h->sid;
-		//tmp.last_45port = ip45h->ip45sp;
 		tmp.last_45port = ntohs(peer45_addr->sin_port);
 		ses_rec = session_table_add(&sessions, &tmp);
 		DEBUG("New remote session sid:%lx\n", (unsigned long)ip45h->sid);
@@ -239,15 +218,6 @@ ssize_t ip45_to_ipv6(struct sockaddr_in *peer45_addr, char *ip45pkt, ssize_t len
 	ses_rec->sport = sport;
 	ses_rec->dport = dport;
 
-/*
-	sid_hash = 0;
-	sid_hash += inet_cksum(&ip45h->s45addr, sizeof(ip45h->s45addr));
-	sid_hash += inet_cksum(&ip45h->nexthdr, sizeof(ip45h->nexthdr));
-	sid_hash += inet_cksum(&sport, sizeof(sport));
-	sid_hash += inet_cksum(&dport, sizeof(dport));
-	sid_hash_table[sid_hash] = ip45h->sid;
-*/
-
 	return datalen + sizeof(struct ip6_hdr);
 }
 
@@ -278,7 +248,6 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt, struct sockaddr_
 		DEBUG("Not valid src \n");
 		return -1;
 	}
-
 
 	/* update checksum */
 	switch (ip6h->ip6_nxt) {
@@ -323,61 +292,15 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt, struct sockaddr_
 	memset(ip45h, 0x0, sizeof(struct ip45hdr_p3));
 
 
-
-
-	/* find the sid into hash table  */
-/*	sid_hash = 0;
-	sid_hash += inet_cksum(&ip6h->ip6_dst, sizeof(ip6h->ip6_dst));
-	sid_hash += inet_cksum(&ip6h->ip6_nxt, sizeof(ip6h->ip6_nxt));
-	sid_hash += inet_cksum(&sport, sizeof(sport));
-	sid_hash += inet_cksum(&dport, sizeof(dport));
-	if (sid_hash_table[sid_hash] == 0) { */
-		//ip45h->sid = random();	/* should be random number */
-//		ip45h->sid = rand();	/* should be random number */
-/*		sid_hash_table[sid_hash] = ip45h->sid;
-		DEBUG("new sid %lx created\n", (unsigned long)ip45h->sid);
-	} else {
-		ip45h->sid = sid_hash_table[sid_hash];
-	}
-*/
-
-//	ip45h->mver = 4;
-//	ip45h->sver = 5;
-//	ip45h->protocol = IPPROTO_UDP;
-
 	ip45h->nexthdr = ip6h->ip6_nxt;		/* next header */
 	ip45h->sid = ses_rec->sid;
-//	ip45h->ip45sp = htons(IP45_COMPAT_UDP_PORT);
-//	ip45h->ip45dp = htons(ses_rec->last_45port);
 	peer45_addr->sin_family = AF_INET;
 	peer45_addr->sin_port = htons(ses_rec->last_45port);
-//	memset(&ip45h->s45addr, 0x0, sizeof(ip45h->d45addr));
-//	ip45h->saddr = (uint32_t)source_v4_address.s_addr;
 
 	/* create dst IPv4 IP45stck address and d45mark  */
-//	ip45h->d45mark = in45_to_stck45((void *)&ip45h->daddr, &ip45h->d45stck, (void *)&ses_rec->last_s45addr);
-	ip45h->d45mark = in45_to_stck45(&(peer45_addr->sin_addr), &ip45h->d45stck, (void *)&ses_rec->last_s45addr);
-/*
-	memcpy((char *)&ip45h->s45addr + sizeof(ip45h->s45addr) - sizeof(ip45h->saddr), 
-			(char *)&ip45h->saddr, sizeof(ip45h->saddr));
-	memcpy(&ip45h->d45addr, &ses_rec->last_s45addr, sizeof(ip45h->d45addr)); 
-	memcpy(&ip45h->daddr, 	*/			/* copy first non 0 32 bytes from src addr */
-//			ip45_addr_begin(&ip45h->d45addr), sizeof(ip45h->daddr));
-
-//	ip45h->ttl = htons(ntohs(ip6h->ip6_hlim) - 1);	/*  hop limit */ 
-
-
-//	ip45h->tot_len = htons(datalen + sizeof(struct ip45hdr_p3));
-//	ip45h->ip45le = htons(datalen + sizeof(struct ip45hdr) - 20);
-#ifdef __APPLE__
-	/* BSD requires it in host order Linux not */
-//	ip45h->tot_len = ntohs(ip45h->tot_len);
-#endif
-
-//	ip45h->d45mark = 12 - (ip45_addr_begin(&ip45h->d45addr) - (void *)&ip45h->d45addr);
-//	ip45h->check1 = inet_cksum(ip45h, 5);
-//	ip45h->check1 = inet_cksum(ip45h, sizeof(struct iphdr));
-//	ip45h->check2 = inet_cksum(ip45h, sizeof(struct ip45hdr));
+	ip45h->d45mark = in45_to_stck45(&(peer45_addr->sin_addr), 
+						&ip45h->d45stck, 
+						(void *)&ses_rec->last_s45addr);
 
 	/* copy data to the new buffer */
 	memcpy(ip45data, ip6data, datalen);
@@ -485,7 +408,7 @@ int main(int argc, char *argv[]) {
 //	struct ip6_hdr *ip6h = (struct ip6_hdr *)(buf6 + sizeof(struct ether_header));
 //	struct ip6_hdr *ip6h = (struct ip6_hdr *)(buf6 + sizeof(struct null_hdr));
 	struct ip6_hdr *ip6h = (struct ip6_hdr *)buf6;
-	struct ip45hdr *ip45h = (struct ip45hdr *)buf45;
+	struct ip45hdr_p3 *ip45h = (struct ip45hdr_p3 *)buf45;
 	struct in45_addr s45addr, d45addr;
 	char saddr[IP45_ADDR_LEN];
 	char daddr[IP45_ADDR_LEN];
@@ -573,10 +496,10 @@ int main(int argc, char *argv[]) {
 			}
 
 			/* valid IP45 packet */
-			ip45h = (struct ip45hdr *)buf45;
+			ip45h = (struct ip45hdr_p3 *)buf45;
 
-			stck45_to_in45(&s45addr, (void *)&ip45h->saddr, &ip45h->s45stck, ip45h->s45mark);
-			stck45_to_in45(&d45addr, (void *)&ip45h->daddr, &ip45h->d45stck, ip45h->d45mark);
+			stck45_to_in45(&s45addr, (void *)&peer45_addr.sin_addr, &ip45h->s45stck, ip45h->s45mark);
+			stck45_to_in45(&d45addr, (void *)&source_v4_address, &ip45h->d45stck, ip45h->d45mark);
 			inet_ntop45((char *)&s45addr, saddr, IP45_ADDR_LEN);
 			inet_ntop45((char *)&d45addr, daddr, IP45_ADDR_LEN);
 		

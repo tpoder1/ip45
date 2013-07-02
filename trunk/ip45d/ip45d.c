@@ -367,12 +367,17 @@ int init_sock() {
 
 	int sock;
 	struct sockaddr_in ls; 
-//	int yes = 1;
+	int yes = 1;
 
 //	if ((sock=socket(AF_INET, SOCK_RAW, IPPROTO_UDP)) < 0) {   
 	if ((sock=socket(AF_INET, SOCK_DGRAM, 0)) < 0) {   
 		perror("snd_sock socket");
 		return -1;
+	}
+
+	if (setsockopt(sock, IPPROTO_IP, SO_NO_CHECK,(char *)&yes, sizeof(yes)) < 0 ) {
+		perror("setsockopt SO_NO_CHECK");
+		return -1;	
 	}
 
 /*

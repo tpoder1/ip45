@@ -100,6 +100,7 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 					(char *)&ip45h->saddr + sizeof(struct in_addr) - shlen , shlen);
 			memcpy(&ip45h->saddr, &info->upstream, sizeof(struct in_addr));
 			csum_replace4(&ip45h->check1, oldip, ip45h->saddr);
+			ip45h->ip45ze = 0x0;
 		} else {
 			printk(KERN_ERR "IP45: s45mark reached the maximum value : %d/%d\n", 
 						(int)ip45h->s45mark, (int)sizeof(struct in45_stck));
@@ -124,6 +125,7 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 					(char *)&ip45h->d45stck + sizeof(struct in45_stck) - ip45h->d45mark, shlen);
 			ip45h->d45mark -= shlen;
 			csum_replace4(&ip45h->check1, oldip, ip45h->daddr);
+			ip45h->ip45ze = 0x0;
 		}
 	}
 

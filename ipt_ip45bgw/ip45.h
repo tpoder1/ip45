@@ -4,7 +4,7 @@
 */
 
 #ifndef _NET_IP45_H
-#define _NET_IP45_H "2013-06-27 03"
+#define _NET_IP45_H "2013-07-03 01"
 
 #ifdef linux 
 #include <linux/types.h>
@@ -101,6 +101,29 @@ struct ip45hdr {
 	/* no IP options allowed in IP4.5 */
 };
 
+#pragma pack(push, 1)
+
+/* IP45 without p1 and p2 part (IP, UDP) */
+struct ip45hdr_p3 {
+	uint8_t	nexthdr;
+#if defined(__LITTLE_ENDIAN__)
+	uint8_t	d45mark:4,
+			s45mark:4;
+#elif defined (__BIG_ENDIAN__)
+	uint8_t	s45mark:4,
+	  		d45mark:4;				
+#else
+#error	"Byte order not detected"
+#endif
+	uint16_t	check45;
+	struct in45_stck	s45stck;
+	struct in45_stck	d45stck;
+	uint64_t	sid;  
+	/* no IP options allowed in IP4.5 */
+};
+
+#pragma pack(pop)
+
 struct sockaddr_in45 {
 	sa_family_t			sin45_family;	/* Address family		*/
 	uint16_t				sin45_port;		/* Port number			*/
@@ -125,7 +148,7 @@ static inline int is_ip45_pkt(const struct ip45hdr *ip45h)
 	return (ip45h->mver == 4 && \
 			ip45h->sver == 5 && \
 			ip45h->protocol == IPPROTO_UDP && \
-			( ip45h->ip45dp == htons(IP45_COMPAT_UDP_PORT) || 
+			( ip45h->ip45sp == htons(IP45_COMPAT_UDP_PORT) || 
 			ip45h->ip45dp == htons(IP45_COMPAT_UDP_PORT)) );
 }
 

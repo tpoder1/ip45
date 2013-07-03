@@ -4,7 +4,7 @@
 */
 
 #ifndef _NET_IP45_H
-#define _NET_IP45_H "2013-07-03 01"
+#define _NET_IP45_H "2013-07-03 02"
 
 #ifdef linux 
 #include <linux/types.h>
@@ -19,16 +19,7 @@
 #endif
 #endif
 
-
-#ifndef IPPROTO_IP45_DEFINED
-enum {
-  IPPROTO_IP45 = 155,	/* IP 4.5  - IP45          */
-  IPPROTO_CDP = 156,	/* IP 4.5  - Content Delivery Protocol */
-};
-#define IPPROTO_IP45_DEFINED 1
-#endif
-
-#define IP45_COMPAT_UDP_PORT 45
+#define IP45_COMPAT_UDP_PORT 4
 
 /* IP45 address structure */
 struct in45_addr

@@ -1,7 +1,7 @@
 
 
-O=tcpdump-4.1.1
-U=tcpdump-4.1.1-ip45
+O=tcpdump
+U=tcpdump-ip45
 P=tcpdump-ip45.patch
 
 #cd $U && make clean && cd ..
@@ -11,8 +11,11 @@ diff --exclude autom4te.cache \
 	--exclude config.* \
 	--exclude Makefile \
 	--exclude Makefile-* \
+	--exclude *.orig \
 	--exclude version.c \
 	--exclude tcpdump.1 \
 	--exclude tcpdump \
+	--exclude print-ip45.c \
+	--exclude ip45.h \
 	-rupN $O $U >> $P
 

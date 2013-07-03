@@ -67,7 +67,7 @@ struct null_hdr {
 
 int debug = 0;						/* 1 = debug mode */
 //uint64_t sid_hash_table[65536] = { };
-struct in_addr source_v4_address;
+//struct in_addr source_v4_address;
 struct session_table_t sessions;
 
 void usage(void) {
@@ -123,7 +123,7 @@ ssize_t ip45_to_ipv6(struct sockaddr_in *peer45_addr, char *ip45pkt, ssize_t len
 	struct ip6_hdr *ip6h = (struct ip6_hdr *)ip6pkt;
 	char *ip45data = ip45pkt + sizeof(struct ip45hdr_p3);
 	char *ip6data = ip6pkt + sizeof(struct ip6_hdr);
-	struct in45_addr s45addr, d45addr;
+	struct in45_addr s45addr;
 	ssize_t datalen;
 	uint16_t sport = 0;
 	uint16_t dport = 0;
@@ -134,7 +134,7 @@ ssize_t ip45_to_ipv6(struct sockaddr_in *peer45_addr, char *ip45pkt, ssize_t len
 
 	/* get source and destination IP45 address from the packet */
 	stck45_to_in45(&s45addr, &peer45_addr->sin_addr, &ip45h->s45stck, ip45h->s45mark);
-	stck45_to_in45(&d45addr, (void *)&source_v4_address, &ip45h->d45stck, ip45h->d45mark);
+//	stck45_to_in45(&d45addr, (void *)&source_v4_address, &ip45h->d45stck, ip45h->d45mark);
 
 	/* prepare IPv6 packet */
 	memset(ip6h, 0, sizeof(struct ip6_hdr));
@@ -418,7 +418,8 @@ int main(int argc, char *argv[]) {
 //	struct ip6_hdr *ip6h = (struct ip6_hdr *)(buf6 + sizeof(struct null_hdr));
 	struct ip6_hdr *ip6h = (struct ip6_hdr *)buf6;
 	struct ip45hdr_p3 *ip45h = (struct ip45hdr_p3 *)buf45;
-	struct in45_addr s45addr, d45addr;
+	//struct in45_addr s45addr, d45addr;
+	struct in45_addr s45addr;
 	char saddr[IP45_ADDR_LEN];
 	char daddr[IP45_ADDR_LEN];
 	char op;
@@ -427,16 +428,18 @@ int main(int argc, char *argv[]) {
 	socklen_t addrlen = sizeof(struct sockaddr_in);
 	ssize_t len;
 
-	source_v4_address.s_addr = 0x0;
+	//source_v4_address.s_addr = 0x0;
 
 	/* parse input parameters */
 	while ((op = getopt(argc, argv, "4:?")) != -1) {
 		switch (op) {
 			case '4': 
+					/*
 					if (!inet_pton(AF_INET, optarg, (void *)&source_v4_address)) {
 						LOG("Invalid IPv4 address %s\n", optarg);
 						exit(1);
 					};
+					*/
 					break;
 			case '?': usage();
 		}
@@ -444,6 +447,7 @@ int main(int argc, char *argv[]) {
 
 	session_table_init(&sessions);
 
+/*
 	if (source_v4_address.s_addr == 0x0) {
 		LOG("Source address no initalised (option -4)\n");
 		exit(2);
@@ -452,6 +456,7 @@ int main(int argc, char *argv[]) {
 		inet_ntop(AF_INET, &source_v4_address, (void *)&buf, 200);
 		LOG("Source IPv4 address: %s\n", buf);
 	}
+*/
 
 
 	if ( (tunfd = tun_alloc(tun_name)) < 0 ) {
@@ -508,12 +513,13 @@ int main(int argc, char *argv[]) {
 			ip45h = (struct ip45hdr_p3 *)buf45;
 
 			stck45_to_in45(&s45addr, (void *)&peer45_addr.sin_addr, &ip45h->s45stck, ip45h->s45mark);
-			stck45_to_in45(&d45addr, (void *)&source_v4_address, &ip45h->d45stck, ip45h->d45mark);
+//			stck45_to_in45(&d45addr, (void *)&source_v4_address, &ip45h->d45stck, ip45h->d45mark);
 			inet_ntop45((char *)&s45addr, saddr, IP45_ADDR_LEN);
-			inet_ntop45((char *)&d45addr, daddr, IP45_ADDR_LEN);
+//			inet_ntop45((char *)&d45addr, daddr, IP45_ADDR_LEN);
 		
-			DEBUG("Received IP45 packet %s->%s, sid=%016lx, proto=%d\n", 
-				saddr, daddr, 
+			DEBUG("Received IP45 packet %s->{me}, sid=%016lx, proto=%d\n", 
+				saddr,  
+				//saddr, daddr, 
 				(unsigned long)ip45h->sid, ip45h->nexthdr);
 
 			//tunh->flags = 0x0;

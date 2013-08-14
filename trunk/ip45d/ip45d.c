@@ -73,8 +73,9 @@ struct session_table_t sessions;
 void usage(void) {
 	printf("IP45 daemon version %s\n", VERSION);
 	printf("Usage:\n");
-	printf("ip45d -4 <ip address of IPv4 interface>\n");
-	printf(" -4 : local IPv4 address for outgoing IP45 packets\n");
+	printf("ip45d [ -D  ] [ -v ] \n");
+	printf(" -D : daemonize process\n");
+	printf(" -v : provide more debug information\n");
 	exit(1);
 }
 
@@ -405,6 +406,49 @@ int init_sock() {
 	return sock;
 }
 
+
+/* daemonize process */
+static void daemonize(void) {
+	pid_t pid, sid;
+
+	/* already a daemon */
+	if ( getppid() == 1 ) return;
+
+	/* Fork off the parent process */
+	pid = fork();
+	if (pid < 0) {
+		exit(2);
+	}
+	/* If we got a good PID, then we can exit the parent process. */
+	if (pid > 0) {
+		exit(1);
+	}
+
+	/* At this point we are executing as the child process */
+
+	/* Change the file mode mask */
+	//umask(0);
+   
+	/* Create a new SID for the child process */
+	sid = setsid();
+	if (sid < 0) {
+		exit(2);
+	}
+   
+
+	/* Change the current working directory.  This prevents the current
+	* directory from being locked; hence not being able to remove it. */
+	if ((chdir("/")) < 0) {
+		exit(2);
+	}
+
+	/* Redirect standard files to /dev/null */
+	freopen( "/dev/null", "r", stdin);
+	freopen( "/dev/null", "w", stdout);
+	freopen( "/dev/null", "w", stderr);
+}
+
+
 int main(int argc, char *argv[]) {
 
 	char tun_name[IFNAMSIZ] = TUNIF_NAME;
@@ -423,6 +467,8 @@ int main(int argc, char *argv[]) {
 	char saddr[IP45_ADDR_LEN];
 	char daddr[IP45_ADDR_LEN];
 	char op;
+	int daemon_opt = 0;
+	int verbose_opt = 0;
 	int tunfd, sockfd, maxfd;
 	struct sockaddr_in peer45_addr;
 	socklen_t addrlen = sizeof(struct sockaddr_in);
@@ -431,33 +477,20 @@ int main(int argc, char *argv[]) {
 	//source_v4_address.s_addr = 0x0;
 
 	/* parse input parameters */
-	while ((op = getopt(argc, argv, "4:?")) != -1) {
+	while ((op = getopt(argc, argv, "Dv?")) != -1) {
 		switch (op) {
-			case '4': 
-					/*
-					if (!inet_pton(AF_INET, optarg, (void *)&source_v4_address)) {
-						LOG("Invalid IPv4 address %s\n", optarg);
-						exit(1);
-					};
-					*/
-					break;
+			case 'D': daemon_opt = 1; break;
+			case 'v': verbose_opt = 1; break;
 			case '?': usage();
 		}
 	}
 
-	session_table_init(&sessions);
-
-/*
-	if (source_v4_address.s_addr == 0x0) {
-		LOG("Source address no initalised (option -4)\n");
-		exit(2);
-	} else {
-		char buf[200];
-		inet_ntop(AF_INET, &source_v4_address, (void *)&buf, 200);
-		LOG("Source IPv4 address: %s\n", buf);
+	/* daemonize process */
+	if (daemon_opt) {
+		daemonize();
 	}
-*/
 
+	session_table_init(&sessions);
 
 	if ( (tunfd = tun_alloc(tun_name)) < 0 ) {
 		LOG("Cant initialize ip45 on interface\n");
@@ -513,27 +546,17 @@ int main(int argc, char *argv[]) {
 			ip45h = (struct ip45hdr_p3 *)buf45;
 
 			stck45_to_in45(&s45addr, (void *)&peer45_addr.sin_addr, &ip45h->s45stck, ip45h->s45mark);
-//			stck45_to_in45(&d45addr, (void *)&source_v4_address, &ip45h->d45stck, ip45h->d45mark);
-			inet_ntop45((char *)&s45addr, saddr, IP45_ADDR_LEN);
-//			inet_ntop45((char *)&d45addr, daddr, IP45_ADDR_LEN);
-		
-			DEBUG("Received IP45 packet %s->{me}, sid=%016lx, proto=%d\n", 
-				saddr,  
-				//saddr, daddr, 
-				(unsigned long)ip45h->sid, ip45h->nexthdr);
 
-			//tunh->flags = 0x0;
-			//tunh->proto = htons(ETH_P_IPV6);
-		//	ethh->ether_type = htons(ETHERTYPE_IPV6);
-//			ethh->ether_shost[5] = 5;
-//			ethh->ether_dhost[5] = 1;
-//			nullh->family = AF_INET6;
+			if (verbose_opt) {
+				inet_ntop45((char *)&s45addr, saddr, IP45_ADDR_LEN);
+		
+				DEBUG("Received IP45 packet %s->{me}, sid=%016lx, proto=%d\n", 
+					saddr,  
+					(unsigned long)ip45h->sid, ip45h->nexthdr);
+			}
+
 
 			if ( (len = write(tunfd, buf6, len) ) < 0 ) {
-			//if ( (len = write(tunfd, buf6, len + sizeof(struct tun_pi))) < 0 ) {
-			//if ( (len = write(tunfd, buf6, len + sizeof(struct ether_header))) < 0 ) {
-			//if ( (len = pcap_inject(pcap_dev, buf6, len + sizeof(struct ether_header))) < 0 ) {
-		//	if ( (len = pcap_sendpacket(pcap_dev, buf6, len + sizeof(struct ether_header))) < 0 ) {
 				perror("send tunfd");
 			}
 		}
@@ -553,20 +576,13 @@ int main(int argc, char *argv[]) {
 				continue;
 			}
 
-			inet_ntop(AF_INET6, (char *)&ip6h->ip6_src, saddr, IP45_ADDR_LEN);
-			inet_ntop(AF_INET6, (char *)&ip6h->ip6_dst, daddr, IP45_ADDR_LEN);
-			DEBUG("Received IPv6 packet %s -> %s, proto=%d bytes=%d\n", 
-					saddr, daddr,
-					ip6h->ip6_nxt, (int)len);
-
-			/* prepare dst addr */
-			/*
-			memset(&dst_addr, 0x0, sizeof(dst_addr));
-			dst_addr.sin_family = AF_INET;
-			dst_addr.sin_addr.s_addr = ip45h->daddr;
-			dst_addr.sin_port = htons(0);
-			*/
-
+			if (verbose_opt) {
+				inet_ntop(AF_INET6, (char *)&ip6h->ip6_src, saddr, IP45_ADDR_LEN);
+				inet_ntop(AF_INET6, (char *)&ip6h->ip6_dst, daddr, IP45_ADDR_LEN);
+				DEBUG("Received IPv6 packet %s -> %s, proto=%d bytes=%d\n", 
+						saddr, daddr,
+						ip6h->ip6_nxt, (int)len);
+			}
 
 			len = sendto(sockfd, buf45, len, 0, 
 				(struct sockaddr*)&peer45_addr, sizeof(struct sockaddr_in) );

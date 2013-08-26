@@ -18,9 +18,8 @@
 
 #ifdef WIN32
 #include <windows.h>
-//#include <winsock.h>
 #include <winsock2.h>
-#include <Ws2tcpip.h>
+//#include <Ws2tcpip.h>
 #include <winioctl.h>
 #include "tap-windows.h"
 #include "ip6.h"
@@ -66,8 +65,6 @@ struct null_hdr {
 
 
 int debug = 0;						/* 1 = debug mode */
-//uint64_t sid_hash_table[65536] = { };
-//struct in_addr source_v4_address;
 struct session_table_t sessions;
 
 void usage(void) {
@@ -135,12 +132,10 @@ ssize_t ip45_to_ipv6(struct sockaddr_in *peer45_addr, char *ip45pkt, ssize_t len
 
 	/* get source and destination IP45 address from the packet */
 	stck45_to_in45(&s45addr, &peer45_addr->sin_addr, &ip45h->s45stck, ip45h->s45mark);
-//	stck45_to_in45(&d45addr, (void *)&source_v4_address, &ip45h->d45stck, ip45h->d45mark);
 
 	/* prepare IPv6 packet */
 	memset(ip6h, 0, sizeof(struct ip6_hdr));
 
-//	ip6h->ip6_vfc = htons(0x60); /* 4 bits version, 4 bits priority */
 	ip6h->ip6_flow = htonl ((6 << 28) | (0 << 20) | 0); /* 4 bits version, 4 bits priority */
 	ip6h->ip6_plen = htons(datalen);	/* payload length */
 	ip6h->ip6_nxt = ip45h->nexthdr;		/* next header */
@@ -385,14 +380,6 @@ int init_sock() {
 	}
 #endif
 
-/*
-	if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL,(char *)&yes, sizeof(yes)) < 0 ) {
-		perror("setsockopt IP_HDRINCL");
-		return -1;	
-	}
-*/
-
-
 	bzero(&ls, sizeof(struct sockaddr_in));
 	ls.sin_family = AF_INET;
 	ls.sin_addr.s_addr = INADDR_ANY;
@@ -449,48 +436,22 @@ static void daemonize(void) {
 }
 
 
-int main(int argc, char *argv[]) {
+#ifndef WIN32
+int main_loop_posix(int verbose_opt) {
 
 	char tun_name[IFNAMSIZ] = TUNIF_NAME;
 	char buf45[PKT_BUF_SIZE];
 	char buf6[PKT_BUF_SIZE];
-//	struct tun_pi *tunh = (struct tun_pi *)buf6;
-//	struct ether_header *ethh = (struct ether_header *)buf6;
-//	struct null_hdr *nullh = (struct null_hdr *)buf6;
-//	struct ip6_hdr *ip6h = (struct ip6_hdr *)(buf6 + sizeof(struct tun_pi));
-//	struct ip6_hdr *ip6h = (struct ip6_hdr *)(buf6 + sizeof(struct ether_header));
-//	struct ip6_hdr *ip6h = (struct ip6_hdr *)(buf6 + sizeof(struct null_hdr));
 	struct ip6_hdr *ip6h = (struct ip6_hdr *)buf6;
 	struct ip45hdr_p3 *ip45h = (struct ip45hdr_p3 *)buf45;
-	//struct in45_addr s45addr, d45addr;
 	struct in45_addr s45addr;
 	char saddr[IP45_ADDR_LEN];
 	char daddr[IP45_ADDR_LEN];
-	char op;
-	int daemon_opt = 0;
-	int verbose_opt = 0;
 	int tunfd, sockfd, maxfd;
 	struct sockaddr_in peer45_addr;
 	socklen_t addrlen = sizeof(struct sockaddr_in);
 	ssize_t len;
 
-	//source_v4_address.s_addr = 0x0;
-
-	/* parse input parameters */
-	while ((op = getopt(argc, argv, "Dv?")) != -1) {
-		switch (op) {
-			case 'D': daemon_opt = 1; break;
-			case 'v': verbose_opt = 1; break;
-			case '?': usage();
-		}
-	}
-
-	/* daemonize process */
-	if (daemon_opt) {
-		daemonize();
-	}
-
-	session_table_init(&sessions);
 
 	if ( (tunfd = tun_alloc(tun_name)) < 0 ) {
 		LOG("Cant initialize ip45 on interface\n");
@@ -592,5 +553,34 @@ int main(int argc, char *argv[]) {
 		}
 	}
 }
+#endif
+
+int main(int argc, char *argv[]) {
+
+	char op;
+	int daemon_opt = 0;
+	int verbose_opt = 0;
+
+	/* parse input parameters */
+	while ((op = getopt(argc, argv, "Dv?")) != -1) {
+		switch (op) {
+			case 'D': daemon_opt = 1; break;
+			case 'v': verbose_opt = 1; break;
+			case '?': usage();
+		}
+	}
+
+	/* daemonize process */
+	if (daemon_opt) {
+		daemonize();
+	}
+
+	session_table_init(&sessions);
+
+#ifdef WIN32
+#else 
+	return main_loop_posix(verbose_opt);
+#endif
 
 
+}

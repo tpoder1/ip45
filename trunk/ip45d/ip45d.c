@@ -21,6 +21,9 @@
 #include <winsock2.h>
 //#include <Ws2tcpip.h>
 #include <winioctl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include "tap-windows.h"
 #include "ip6.h"
 #else 
@@ -46,6 +49,11 @@
 #define TUNIF_NAME "tun4"
 #endif 
 
+#ifdef WIN32 
+#define MAX_KEY_LENGTH 255
+#define MAX_VALUE_NAME 16383
+#define TUNIF_NAME "ip45"
+#endif
 
 #include <fcntl.h>
 #include "ip45.h"
@@ -557,9 +565,130 @@ int main_loop_posix(int verbose_opt) {
 }
 #endif
 
+
+/* windows specific code */
 #ifdef WIN32
+
+void GetDeviceGuid(char* szDeviceGuid) {	
+	HKEY hKey = NULL;
+	//if (ERROR_SUCCESS==RegOpenKeyEx(HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Control\\Class\\{4D36E972-E325-11CE-BFC1-08002BE10318}", 0, KEY_READ, &hKey))
+	if (ERROR_SUCCESS==RegOpenKeyEx(HKEY_LOCAL_MACHINE, ADAPTER_KEY, 0, KEY_READ, &hKey))
+	{
+		TCHAR    achKey[MAX_KEY_LENGTH];   // buffer for subkey name
+		DWORD    cbName;                   // size of name string 
+		TCHAR    achClass[MAX_PATH] = TEXT("");  // buffer for class name 
+		DWORD    cchClassName = MAX_PATH;  // size of class string 
+		DWORD    cSubKeys=0;               // number of subkeys 
+		DWORD    cbMaxSubKey;              // longest subkey size 
+		DWORD    cchMaxClass;              // longest class string 
+		DWORD    cValues;              // number of values for key 
+		DWORD    cchMaxValue;          // longest value name 
+		DWORD    cbMaxValueData;       // longest value data 
+		DWORD    cbSecurityDescriptor; // size of security descriptor 
+		FILETIME ftLastWriteTime;      // last write time 
+
+		DWORD i, retCode; 
+
+		//TCHAR  achValue[MAX_VALUE_NAME]; 
+		//DWORD cchValue = MAX_VALUE_NAME; 
+	
+		retCode = RegQueryInfoKey(
+			hKey,                    // key handle 
+			achClass,                // buffer for class name 
+			&cchClassName,           // size of class string 
+			NULL,                    // reserved 
+			&cSubKeys,               // number of subkeys 
+			&cbMaxSubKey,            // longest subkey size 
+			&cchMaxClass,            // longest class string 
+			&cValues,                // number of values for this key 
+			&cchMaxValue,            // longest value name 
+			&cbMaxValueData,         // longest value data 
+			&cbSecurityDescriptor,   // security descriptor 
+			&ftLastWriteTime);       // last write time 
+
+		for (i=0; i<cSubKeys; i++) 
+        { 
+            cbName = MAX_KEY_LENGTH;
+            retCode = RegEnumKeyEx(hKey, i,
+                     achKey, 
+                     &cbName, 
+                     NULL, 
+                     NULL, 
+                     NULL, 
+                     &ftLastWriteTime); 
+            if (retCode == ERROR_SUCCESS) 
+            {    
+				HKEY hSubKey = NULL;
+				if (ERROR_SUCCESS==RegOpenKeyEx(hKey, achKey, 0, KEY_READ, &hSubKey))
+				{
+					BYTE szComponent[1000];
+					DWORD cbData = 1000;
+					DWORD dwType = REG_SZ;
+
+					memset(szComponent, 0, 1000);
+					RegQueryValueEx(hSubKey, "ComponentId", NULL, &dwType, szComponent, (void *)&cbData);
+					//DEBUG("Found interface: %s\n", szComponent);
+					//if (!strcmp(szComponent, "tap0801"))
+					if (!strcmp((char *)szComponent, "tap0901"))
+					{
+						cbData = 1000;
+						dwType = REG_SZ;
+						RegQueryValueEx(hSubKey, "NetCfgInstanceId", NULL, &dwType, (void *)szDeviceGuid, (void *)&cbData);
+						break;
+					}
+					RegCloseKey(hSubKey);
+				}
+            }
+        }
+		RegCloseKey(hKey);
+	}
+}
+
+void GetHumanName(char* szDeviceGuid, char* szHumanName)
+{
+	HKEY hKey = NULL;
+	char szKeyName[1999];
+	strcpy(szKeyName, NETWORK_CONNECTIONS_KEY);
+	strcat(szKeyName, "\\");
+//	strcpy(szKeyName, "SYSTEM\\CurrentControlSet\\Control\\Network\\{4D36E972-E325-11CE-BFC1-08002BE10318}\\");
+	if (strlen(szDeviceGuid) > 0)
+	{
+		strcat(szKeyName, szDeviceGuid);
+		strcat(szKeyName, "\\Connection");
+		DEBUG("KEY: %s\n", szKeyName);
+		if (ERROR_SUCCESS==RegOpenKeyEx(HKEY_LOCAL_MACHINE, szKeyName, 0, KEY_READ, &hKey))
+		{			
+			DWORD cbData = 1000;
+			DWORD dwType = REG_SZ;
+
+			memset(szHumanName, 0, 1000);
+			RegQueryValueEx(hKey, "Name", NULL, &dwType, (void *)szHumanName, (void *)&cbData);
+
+			RegCloseKey(hKey);
+		}
+	}
+}
+
+int TAP_CONTROL_CODE(int request, int method)
+{
+	return CTL_CODE(FILE_DEVICE_UNKNOWN, request, method, FILE_ANY_ACCESS);
+}
+
+
 /* WINDOWS only: main loop */
 int main_loop_win(int verbose_opt) {
+	int i;
+	DWORD len;
+	int ptun[3] = {0x0100030a, 0x0000030a, 0x00ffffff};
+	OVERLAPPED reading;
+	OVERLAPPED writing;
+	DWORD pstatus;
+	HANDLE ptr;
+	char devGuid[1000];
+	char devHuman[1000];
+	char fileName[1000];
+	BYTE buf[10000];
+	int x = 0;
 
 /*	char tun_name[IFNAMSIZ] = TUNIF_NAME;
 	char buf45[PKT_BUF_SIZE];
@@ -573,20 +702,59 @@ int main_loop_win(int verbose_opt) {
 	struct sockaddr_in peer45_addr;
 	socklen_t addrlen = sizeof(struct sockaddr_in);
 	ssize_t len;
-
-
-
-	if ( (tunfd = tun_alloc_posix(tun_name)) < 0 ) {
-		LOG("Cant initialize ip45 on interface\n");
-		exit(2);
-	}
-	LOG("ip45 device: %s\n", tun_name);
-
-	if ((sockfd = init_sock()) < 0) {
-		LOG("Cant initialize ip45 socket\n");
-		exit(2);
-	}
 */
+	memset(devGuid, 0, 1000);
+
+	GetDeviceGuid(devGuid);
+	LOG("Devie GUID: %s\n", devGuid);
+
+	GetHumanName(devGuid, devHuman);
+	LOG("Humman name: %s\n", devHuman);
+	sprintf(fileName, "%s%s%s", USERMODEDEVICEDIR, devGuid, TAP_WIN_SUFFIX);
+
+	LOG("File Name: %s\n", fileName);
+
+
+	ptr = CreateFile(fileName, GENERIC_READ|GENERIC_WRITE, FILE_SHARE_READ|FILE_SHARE_WRITE, 0, OPEN_EXISTING, FILE_ATTRIBUTE_SYSTEM | FILE_FLAG_OVERLAPPED, NULL);
+
+	pstatus = 1;	
+	
+	DeviceIoControl(ptr, TAP_WIN_IOCTL_SET_MEDIA_STATUS, &pstatus, 4, &pstatus, 4, &len, NULL);
+	DeviceIoControl (ptr, TAP_WIN_IOCTL_CONFIG_TUN, ptun, 12, ptun, 12, &len, NULL);
+
+	memset(&reading, 0, sizeof(reading));
+	memset(&writing, 0, sizeof(writing));
+	reading.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);	
+	//writing.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);	
+	//reading.OffsetHigh = 10000;
+
+	while(1) {
+		int ret;
+		DWORD xlen;
+
+		printf("XXX #1 - cycle %d\n", x++);
+		//ReadFile(ptr, buf, 10000, &xlen, &reading);
+		ReadFile(ptr, buf, 10000, NULL, &reading);
+		//ReadFile(ptr, buf, 10000, &xlen, NULL);
+		ret = WaitForSingleObject(reading.hEvent, INFINITE);
+		GetOverlappedResult(ptr, &reading, &xlen, TRUE);
+		
+
+		if (xlen > 0) {	
+			printf("XXX #2 - cycle, ret: %d, read %d bytes\n", ret, (int)xlen);
+
+
+		        for (i = 0; i< xlen; ++i)
+			{
+				printf("%02x ", buf[i]);
+			}
+		}
+
+//		printf("XXX #4 - cycle\n");
+ //     	WriteFile(ptr, buf, 0, reading.Offset, &writing);
+//		WaitForSingleObject(writing.hEvent, INFINITE); 
+//		printf("XXX #5 - cycle\n");
+	}
 
 	return 0;
 }
@@ -628,3 +796,7 @@ int main(int argc, char *argv[]) {
 #endif
 
 }
+
+
+
+

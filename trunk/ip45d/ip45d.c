@@ -71,7 +71,7 @@ void usage(void) {
 	printf("IP45 daemon version %s\n", VERSION);
 	printf("Usage:\n");
 	printf("ip45d [ -D  ] [ -v ] \n");
-	printf(" -D : daemonize process\n");
+	printf(" -D : daemonize process - only on POSIX (non WINDOWS) platform\n");
 	printf(" -v : provide more debug information\n");
 	exit(1);
 }
@@ -305,7 +305,87 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt, struct sockaddr_
 }
 
 
-int tun_alloc(char *dev) {
+/* initialize output socket */
+int init_sock() {
+
+	int sock;
+	struct sockaddr_in ls; 
+#ifdef __linux
+	int yes = 1;
+#endif
+
+//	if ((sock=socket(AF_INET, SOCK_RAW, IPPROTO_UDP)) < 0) {   
+	if ((sock=socket(AF_INET, SOCK_DGRAM, 0)) < 0) {   
+		perror("snd_sock socket");
+		return -1;
+	}
+
+#ifdef __linux
+	if (setsockopt(sock, IPPROTO_IP, SO_NO_CHECK,(char *)&yes, sizeof(yes)) < 0 ) {
+		perror("setsockopt SO_NO_CHECK");
+		return -1;	
+	}
+#endif
+
+	memset(&ls, 0, sizeof(struct sockaddr_in));
+	ls.sin_family = AF_INET;
+	ls.sin_addr.s_addr = INADDR_ANY;
+	ls.sin_port = htons(IP45_COMPAT_UDP_PORT);
+	//ls.sin_port = IP45_COMPAT_UDP_PORT;
+	if (bind(sock, (struct sockaddr *)&ls, sizeof(struct sockaddr_in)) < 0 ) {
+		perror("bind"); 
+		return -1;
+	}
+	
+	return sock;
+}
+
+/* followin code is compiled only on non windows (POSIX) systems */
+#ifndef WIN32
+
+/* POSIX only : daemonize process */
+static void daemonize_posix(void) {
+	pid_t pid, sid;
+
+	/* already a daemon */
+	if ( getppid() == 1 ) return;
+
+	/* Fork off the parent process */
+	pid = fork();
+	if (pid < 0) {
+		exit(2);
+	}
+	/* If we got a good PID, then we can exit the parent process. */
+	if (pid > 0) {
+		exit(1);
+	}
+
+	/* At this point we are executing as the child process */
+
+	/* Change the file mode mask */
+	//umask(0);
+   
+	/* Create a new SID for the child process */
+	sid = setsid();
+	if (sid < 0) {
+		exit(2);
+	}
+   
+
+	/* Change the current working directory.  This prevents the current
+	* directory from being locked; hence not being able to remove it. */
+	if ((chdir("/")) < 0) {
+		exit(2);
+	}
+
+	/* Redirect standard files to /dev/null */
+	freopen( "/dev/null", "r", stdin);
+	freopen( "/dev/null", "w", stdout);
+	freopen( "/dev/null", "w", stderr);
+}
+
+/* POSIX only: alloc tun device */
+int tun_alloc_posix(char *dev) {
 
 	struct ifreq ifr;
 	int fd, err, no;
@@ -358,85 +438,7 @@ int tun_alloc(char *dev) {
 	return fd;
 }
 
-/* initialize output socket */
-int init_sock() {
-
-	int sock;
-	struct sockaddr_in ls; 
-#ifdef __linux
-	int yes = 1;
-#endif
-
-//	if ((sock=socket(AF_INET, SOCK_RAW, IPPROTO_UDP)) < 0) {   
-	if ((sock=socket(AF_INET, SOCK_DGRAM, 0)) < 0) {   
-		perror("snd_sock socket");
-		return -1;
-	}
-
-#ifdef __linux
-	if (setsockopt(sock, IPPROTO_IP, SO_NO_CHECK,(char *)&yes, sizeof(yes)) < 0 ) {
-		perror("setsockopt SO_NO_CHECK");
-		return -1;	
-	}
-#endif
-
-	bzero(&ls, sizeof(struct sockaddr_in));
-	ls.sin_family = AF_INET;
-	ls.sin_addr.s_addr = INADDR_ANY;
-	ls.sin_port = htons(IP45_COMPAT_UDP_PORT);
-	//ls.sin_port = IP45_COMPAT_UDP_PORT;
-	if (bind(sock, (struct sockaddr *)&ls, sizeof(struct sockaddr_in)) < 0 ) {
-		perror("bind"); 
-		return -1;
-	}
-	
-	return sock;
-}
-
-
-/* daemonize process */
-static void daemonize(void) {
-	pid_t pid, sid;
-
-	/* already a daemon */
-	if ( getppid() == 1 ) return;
-
-	/* Fork off the parent process */
-	pid = fork();
-	if (pid < 0) {
-		exit(2);
-	}
-	/* If we got a good PID, then we can exit the parent process. */
-	if (pid > 0) {
-		exit(1);
-	}
-
-	/* At this point we are executing as the child process */
-
-	/* Change the file mode mask */
-	//umask(0);
-   
-	/* Create a new SID for the child process */
-	sid = setsid();
-	if (sid < 0) {
-		exit(2);
-	}
-   
-
-	/* Change the current working directory.  This prevents the current
-	* directory from being locked; hence not being able to remove it. */
-	if ((chdir("/")) < 0) {
-		exit(2);
-	}
-
-	/* Redirect standard files to /dev/null */
-	freopen( "/dev/null", "r", stdin);
-	freopen( "/dev/null", "w", stdout);
-	freopen( "/dev/null", "w", stderr);
-}
-
-
-#ifndef WIN32
+/* POSIX only: main loop */
 int main_loop_posix(int verbose_opt) {
 
 	char tun_name[IFNAMSIZ] = TUNIF_NAME;
@@ -453,7 +455,7 @@ int main_loop_posix(int verbose_opt) {
 	ssize_t len;
 
 
-	if ( (tunfd = tun_alloc(tun_name)) < 0 ) {
+	if ( (tunfd = tun_alloc_posix(tun_name)) < 0 ) {
 		LOG("Cant initialize ip45 on interface\n");
 		exit(2);
 	}
@@ -555,32 +557,74 @@ int main_loop_posix(int verbose_opt) {
 }
 #endif
 
+#ifdef WIN32
+/* WINDOWS only: main loop */
+int main_loop_win(int verbose_opt) {
+
+/*	char tun_name[IFNAMSIZ] = TUNIF_NAME;
+	char buf45[PKT_BUF_SIZE];
+	char buf6[PKT_BUF_SIZE];
+	struct ip6_hdr *ip6h = (struct ip6_hdr *)buf6;
+	struct ip45hdr_p3 *ip45h = (struct ip45hdr_p3 *)buf45;
+	struct in45_addr s45addr;
+	char saddr[IP45_ADDR_LEN];
+	char daddr[IP45_ADDR_LEN];
+	int tunfd, sockfd, maxfd;
+	struct sockaddr_in peer45_addr;
+	socklen_t addrlen = sizeof(struct sockaddr_in);
+	ssize_t len;
+
+
+
+	if ( (tunfd = tun_alloc_posix(tun_name)) < 0 ) {
+		LOG("Cant initialize ip45 on interface\n");
+		exit(2);
+	}
+	LOG("ip45 device: %s\n", tun_name);
+
+	if ((sockfd = init_sock()) < 0) {
+		LOG("Cant initialize ip45 socket\n");
+		exit(2);
+	}
+*/
+
+	return 0;
+}
+#endif /* #ifdef WIN32 */
+
+
 int main(int argc, char *argv[]) {
 
 	char op;
+#ifndef WIN32
 	int daemon_opt = 0;
+#endif
 	int verbose_opt = 0;
 
 	/* parse input parameters */
 	while ((op = getopt(argc, argv, "Dv?")) != -1) {
 		switch (op) {
+#ifndef WIN32
 			case 'D': daemon_opt = 1; break;
+#endif
 			case 'v': verbose_opt = 1; break;
 			case '?': usage();
 		}
 	}
 
+#ifndef WIN32
 	/* daemonize process */
 	if (daemon_opt) {
-		daemonize();
+		daemonize_posix();
 	}
+#endif
 
 	session_table_init(&sessions);
 
 #ifdef WIN32
+	return main_loop_win(verbose_opt);
 #else 
 	return main_loop_posix(verbose_opt);
 #endif
-
 
 }

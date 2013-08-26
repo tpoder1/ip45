@@ -4,20 +4,25 @@
 */
 
 #ifndef _NET_IP45_H
-#define _NET_IP45_H "2013-07-03 02"
+#define _NET_IP45_H "2013-08-26 01"
 
 #ifdef linux 
 #include <linux/types.h>
 #include <asm/byteorder.h>
 //#include <net/inet_sock.h>
 //#include <endian.h>
-#ifdef __LITTLE_ENDIAN
+#ifdef __LITTLE_ENDIAN 
 #define __LITTLE_ENDIAN__
 #endif
-#ifdef __BIG_ENDIAN
+#ifdef __BIG_ENDIAN 
 #define __BIG_ENDIAN__
 #endif
+#endif /* #ifdef linux */
+
+#ifdef WIN32
+typedef unsigned short sa_family_t;
 #endif
+
 
 #define IP45_COMPAT_UDP_PORT 4
 

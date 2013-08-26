@@ -323,8 +323,8 @@ int init_sock() {
 #endif
 
 //	if ((sock=socket(AF_INET, SOCK_RAW, IPPROTO_UDP)) < 0) {   
-	if ((sock=socket(AF_INET, SOCK_DGRAM, 0)) < 0) {   
-		perror("snd_sock socket");
+	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {   
+		perror("sock socket");
 		return -1;
 	}
 
@@ -677,22 +677,24 @@ int TAP_CONTROL_CODE(int request, int method)
 
 /* WINDOWS only: main loop */
 int main_loop_win(int verbose_opt) {
-	int i;
 	DWORD len;
 	int ptun[3] = {0x0100030a, 0x0000030a, 0x00ffffff};
 	OVERLAPPED reading;
-	OVERLAPPED writing;
+//	OVERLAPPED writing;
+	HANDLE objectsHnd[2]; 	/* array with object to handle (file, socket) */
 	DWORD pstatus;
 	HANDLE ptr;
 	char devGuid[1000];
 	char devHuman[1000];
 	char fileName[1000];
-	BYTE buf[10000];
-	int x = 0;
-
-/*	char tun_name[IFNAMSIZ] = TUNIF_NAME;
 	char buf45[PKT_BUF_SIZE];
 	char buf6[PKT_BUF_SIZE];
+	WSAEVENT sockEvent;
+	int x = 0;
+	int sock; 
+	WSADATA wsaData; 
+
+/*	char tun_name[IFNAMSIZ] = TUNIF_NAME;
 	struct ip6_hdr *ip6h = (struct ip6_hdr *)buf6;
 	struct ip45hdr_p3 *ip45h = (struct ip45hdr_p3 *)buf45;
 	struct in45_addr s45addr;
@@ -703,8 +705,9 @@ int main_loop_win(int verbose_opt) {
 	socklen_t addrlen = sizeof(struct sockaddr_in);
 	ssize_t len;
 */
-	memset(devGuid, 0, 1000);
 
+	/* prepare filehandle - TUN device */
+	memset(devGuid, 0, 1000);
 	GetDeviceGuid(devGuid);
 	LOG("Devie GUID: %s\n", devGuid);
 
@@ -715,39 +718,85 @@ int main_loop_win(int verbose_opt) {
 	LOG("File Name: %s\n", fileName);
 
 
-	ptr = CreateFile(fileName, GENERIC_READ|GENERIC_WRITE, FILE_SHARE_READ|FILE_SHARE_WRITE, 0, OPEN_EXISTING, FILE_ATTRIBUTE_SYSTEM | FILE_FLAG_OVERLAPPED, NULL);
+	ptr = CreateFile(fileName, GENERIC_READ|GENERIC_WRITE, FILE_SHARE_READ|FILE_SHARE_WRITE, 0, 
+						OPEN_EXISTING, FILE_ATTRIBUTE_SYSTEM | FILE_FLAG_OVERLAPPED, NULL);
 
 	pstatus = 1;	
-	
 	DeviceIoControl(ptr, TAP_WIN_IOCTL_SET_MEDIA_STATUS, &pstatus, 4, &pstatus, 4, &len, NULL);
 	DeviceIoControl (ptr, TAP_WIN_IOCTL_CONFIG_TUN, ptun, 12, ptun, 12, &len, NULL);
 
+//	memset(&writing, 0, sizeof(writing));
 	memset(&reading, 0, sizeof(reading));
-	memset(&writing, 0, sizeof(writing));
 	reading.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);	
 	//writing.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);	
 	//reading.OffsetHigh = 10000;
 
+		
+	/* prepare socket */
+	if (WSAStartup(0x0101, &wsaData) != 0) {
+		LOG("Could not open Windows sockets\n");
+		exit(2);
+	}
+
+	if ((sock = init_sock()) < 0) {
+		LOG("Cant initialize ip45 socket\n");
+		exit(2);
+	}
+	sockEvent = WSACreateEvent();
+	WSAEventSelect(sock, sockEvent, FD_READ);
+
+	objectsHnd[0] = reading.hEvent;
+	objectsHnd[1] = sockEvent;
+
 	while(1) {
-		int ret;
 		DWORD xlen;
+		DWORD dwEvent;
+		WSANETWORKEVENTS myNetEvents;
+		int ret;
+		struct sockaddr client;
+		int client_len = sizeof(struct sockaddr);
 
 		printf("XXX #1 - cycle %d\n", x++);
+		ReadFile(ptr, buf6, PKT_BUF_SIZE, NULL, &reading);
 		//ReadFile(ptr, buf, 10000, &xlen, &reading);
-		ReadFile(ptr, buf, 10000, NULL, &reading);
 		//ReadFile(ptr, buf, 10000, &xlen, NULL);
-		ret = WaitForSingleObject(reading.hEvent, INFINITE);
-		GetOverlappedResult(ptr, &reading, &xlen, TRUE);
-		
+		//ret = WaitForSingleObject(reading.hEvent, INFINITE);
+		dwEvent = WaitForMultipleObjects(2, objectsHnd, FALSE, INFINITE);
+	
+		switch (dwEvent) {
 
-		if (xlen > 0) {	
-			printf("XXX #2 - cycle, ret: %d, read %d bytes\n", ret, (int)xlen);
+			/* tun device */
+			case WAIT_OBJECT_0 + 0: 	
+				if (GetOverlappedResult(ptr, &reading, &xlen, TRUE) && xlen > 0) {	
+					printf("XXX tun handle #2 - cycle, read %d bytes\n", (int)xlen);
+					/*
+			        for (i = 0; i< xlen; ++i) {
+						printf("%02x ", buf[i] & 0xFF);
+					}
+					*/
+				} else {
+					LOG("Cannot read data GetOverlappedResult\n");
+				}
+				break;
 
+			/* socket */
+			case WAIT_OBJECT_0 + 1: 
+			
+				xlen = recvfrom(sock, (void *)buf45, PKT_BUF_SIZE, 0, (struct sockaddr *)&client, &client_len);
+				printf("#1 RecvFrom, ret %d\n", (int)xlen);
 
-		        for (i = 0; i< xlen; ++i)
-			{
-				printf("%02x ", buf[i]);
-			}
+				ret = WSAEnumNetworkEvents(sock, sockEvent, &myNetEvents);
+				printf("#1 WSAEnumNetworkEvents ret %d\n", ret);
+
+				buf45[xlen + 1] = '\0';
+				printf("RECEIVED DATA (%d bytes): %s\n", (int)xlen, buf45);
+	
+				xlen = sendto(sock, buf45, xlen, 0, (struct sockaddr *)&client, client_len);
+				printf("#1 sendto %d\n", (int)xlen);
+				break;
+
+			default:
+				LOG("Unexpected status WaitForMultipleObjects() 0x%lu\n", dwEvent);
 		}
 
 //		printf("XXX #4 - cycle\n");

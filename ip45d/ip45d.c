@@ -19,13 +19,15 @@
 #ifdef WIN32
 #include <windows.h>
 #include <winsock2.h>
-//#include <Ws2tcpip.h>
+#include <Ws2tcpip.h>
 #include <winioctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include "tap-windows.h"
 #include "ip6.h"
+#include "icmp6.h"
+#include "compat_win.h"
 #else 
 #include <netinet/ip6.h>
 #define __FAVOR_BSD 
@@ -66,6 +68,12 @@
 
 #define LOG(fmt, ...) printf(fmt, ##__VA_ARGS__);
 #define DEBUG(fmt, ...) printf(fmt, ##__VA_ARGS__);
+
+#define LOCAL_IPV6_ADDR "0:0:0:0:0:1:0:0"
+
+unsigned char local_addr[16] =
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x3 };
+
 
 struct null_hdr {
 	uint32_t family;
@@ -175,7 +183,7 @@ ssize_t ip45_to_ipv6(struct sockaddr_in *peer45_addr, char *ip45pkt, ssize_t len
 
 	/* src, dst address */
 	memcpy(&ip6h->ip6_src, &ses_rec->init_s45addr, sizeof(ip6h->ip6_src)); 
-	ip6h->ip6_dst.s6_addr[15] = 2;
+	memcpy(&ip6h->ip6_dst, &local_addr, sizeof(ip6h->ip6_dst));
 //	inet_pton(AF_INET6, "2001:17c:1220:f565::93e5:f0f7", &ip6h->ip6_dst);
 
 	/* copy data to the new buffer */
@@ -237,8 +245,6 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt, struct sockaddr_
 	uint16_t dport = 0;
 	struct session_entry_t *ses_rec;
 //	uint16_t sid_hash = 0;
-	static const unsigned char localhost_bytes[] =
-		{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 };
 
 
 	if (len6 - sizeof(struct ip6_hdr) != ntohs(ip6h->ip6_plen)) {
@@ -248,7 +254,7 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt, struct sockaddr_
 	datalen = len6 - sizeof(struct ip6_hdr);
 
 	/* source address have to be loopback */
-	if( ! memcmp(&ip6h->ip6_src, &localhost_bytes, sizeof(ip6h->ip6_src)) == 0 ) {
+	if( ! memcmp(&ip6h->ip6_src, &local_addr, sizeof(ip6h->ip6_src)) == 0 ) {
 		DEBUG("Not valid src \n");
 		return -1;
 	}
@@ -462,7 +468,6 @@ int main_loop_posix(int verbose_opt) {
 	socklen_t addrlen = sizeof(struct sockaddr_in);
 	ssize_t len;
 
-
 	if ( (tunfd = tun_alloc_posix(tun_name)) < 0 ) {
 		LOG("Cant initialize ip45 on interface\n");
 		exit(2);
@@ -547,6 +552,7 @@ int main_loop_posix(int verbose_opt) {
 				continue;
 			}
 
+
 			if (verbose_opt) {
 				inet_ntop(AF_INET6, (char *)&ip6h->ip6_src, saddr, IP45_ADDR_LEN);
 				inet_ntop(AF_INET6, (char *)&ip6h->ip6_dst, daddr, IP45_ADDR_LEN);
@@ -554,6 +560,7 @@ int main_loop_posix(int verbose_opt) {
 						saddr, daddr,
 						ip6h->ip6_nxt, (int)len);
 			}
+
 
 			len = sendto(sockfd, buf45, len, 0, 
 				(struct sockaddr*)&peer45_addr, sizeof(struct sockaddr_in) );
@@ -679,6 +686,7 @@ int TAP_CONTROL_CODE(int request, int method)
 int main_loop_win(int verbose_opt) {
 	DWORD len;
 	int ptun[3] = {0x0100030a, 0x0000030a, 0x00ffffff};
+	//int ptun[3] = {0x00000000, 0x00000000, 0x00};
 	OVERLAPPED reading;
 //	OVERLAPPED writing;
 	HANDLE objectsHnd[2]; 	/* array with object to handle (file, socket) */
@@ -689,19 +697,20 @@ int main_loop_win(int verbose_opt) {
 	char fileName[1000];
 	char buf45[PKT_BUF_SIZE];
 	char buf6[PKT_BUF_SIZE];
-	WSAEVENT sockEvent;
-	int x = 0;
-	int sock; 
-	WSADATA wsaData; 
-
-/*	char tun_name[IFNAMSIZ] = TUNIF_NAME;
 	struct ip6_hdr *ip6h = (struct ip6_hdr *)buf6;
 	struct ip45hdr_p3 *ip45h = (struct ip45hdr_p3 *)buf45;
-	struct in45_addr s45addr;
 	char saddr[IP45_ADDR_LEN];
 	char daddr[IP45_ADDR_LEN];
-	int tunfd, sockfd, maxfd;
+	
+	struct in45_addr s45addr;
+	WSAEVENT sockEvent;
 	struct sockaddr_in peer45_addr;
+	int client_len = sizeof(struct sockaddr);
+//	int x = 0;
+	int sock; 
+
+/*	char tun_name[IFNAMSIZ] = TUNIF_NAME;
+	int tunfd, sockfd, maxfd;
 	socklen_t addrlen = sizeof(struct sockaddr_in);
 	ssize_t len;
 */
@@ -723,7 +732,7 @@ int main_loop_win(int verbose_opt) {
 
 	pstatus = 1;	
 	DeviceIoControl(ptr, TAP_WIN_IOCTL_SET_MEDIA_STATUS, &pstatus, 4, &pstatus, 4, &len, NULL);
-	DeviceIoControl (ptr, TAP_WIN_IOCTL_CONFIG_TUN, ptun, 12, ptun, 12, &len, NULL);
+	DeviceIoControl(ptr, TAP_WIN_IOCTL_CONFIG_TUN, ptun, 12, ptun, 12, &len, NULL);
 
 //	memset(&writing, 0, sizeof(writing));
 	memset(&reading, 0, sizeof(reading));
@@ -732,11 +741,6 @@ int main_loop_win(int verbose_opt) {
 	//reading.OffsetHigh = 10000;
 
 		
-	/* prepare socket */
-	if (WSAStartup(0x0101, &wsaData) != 0) {
-		LOG("Could not open Windows sockets\n");
-		exit(2);
-	}
 
 	if ((sock = init_sock()) < 0) {
 		LOG("Cant initialize ip45 socket\n");
@@ -745,54 +749,106 @@ int main_loop_win(int verbose_opt) {
 	sockEvent = WSACreateEvent();
 	WSAEventSelect(sock, sockEvent, FD_READ);
 
+	/* prepare array of events for WaitForMultipleObjects */
 	objectsHnd[0] = reading.hEvent;
 	objectsHnd[1] = sockEvent;
 
 	while(1) {
-		DWORD xlen;
+		DWORD len;
 		DWORD dwEvent;
+//		int addrlen;
 		WSANETWORKEVENTS myNetEvents;
-		int ret;
-		struct sockaddr client;
-		int client_len = sizeof(struct sockaddr);
 
-		printf("XXX #1 - cycle %d\n", x++);
 		ReadFile(ptr, buf6, PKT_BUF_SIZE, NULL, &reading);
-		//ReadFile(ptr, buf, 10000, &xlen, &reading);
-		//ReadFile(ptr, buf, 10000, &xlen, NULL);
-		//ret = WaitForSingleObject(reading.hEvent, INFINITE);
+
 		dwEvent = WaitForMultipleObjects(2, objectsHnd, FALSE, INFINITE);
 	
 		switch (dwEvent) {
 
 			/* tun device */
 			case WAIT_OBJECT_0 + 0: 	
-				if (GetOverlappedResult(ptr, &reading, &xlen, TRUE) && xlen > 0) {	
-					printf("XXX tun handle #2 - cycle, read %d bytes\n", (int)xlen);
-					/*
-			        for (i = 0; i< xlen; ++i) {
-						printf("%02x ", buf[i] & 0xFF);
-					}
-					*/
-				} else {
+				if (!GetOverlappedResult(ptr, &reading, &len, TRUE) || len <= 0) {	
 					LOG("Cannot read data GetOverlappedResult\n");
+					continue;
 				}
+
+				/* check NS packets and inject the response */
+				if (ip6h->ip6_nxt == IPPROTO_ICMPV6) {
+					struct icmp6_hdr *icmp6h = (void *)ip6h + sizeof(struct ip6_hdr);
+					char buf_adv[PKT_BUF_SIZE];
+
+					LOG("ICMP v6\n");
+					if (icmp6h->icmp6_type == ND_NEIGHBOR_SOLICIT)  {
+						len = build_nd_adv(buf6, len, buf_adv);
+						LOG("ICMP solic v6\n");
+						continue;
+					}
+				}
+
+				len = ipv6_to_ip45(buf6, len, buf45, &peer45_addr);
+
+				if ((int)len <= 0 ) {
+					LOG("Invalid IPv6 packet\n");
+					continue;
+				}
+
+				if (verbose_opt) {
+					inet_ntop(AF_INET6, (char *)&ip6h->ip6_src, saddr, IP45_ADDR_LEN);
+					inet_ntop(AF_INET6, (char *)&ip6h->ip6_dst, daddr, IP45_ADDR_LEN);
+					DEBUG("Received IPv6 packet %s -> %s, proto=%d bytes=%d\n",
+								saddr, daddr, ip6h->ip6_nxt, (int)len);
+				}
+
+				len = sendto(sock, buf45, len, 0,
+					(struct sockaddr*)&peer45_addr, sizeof(struct sockaddr_in) );
+				if ( len < 0 ) {
+					LOG("Cannot send data sendto\n");
+				}
+
 				break;
 
 			/* socket */
 			case WAIT_OBJECT_0 + 1: 
 			
-				xlen = recvfrom(sock, (void *)buf45, PKT_BUF_SIZE, 0, (struct sockaddr *)&client, &client_len);
-				printf("#1 RecvFrom, ret %d\n", (int)xlen);
+				len = recvfrom(sock, (void *)buf45, PKT_BUF_SIZE, 0, (struct sockaddr *)&peer45_addr, &client_len);
+				printf("#1 RecvFrom, ret %d\n", (int)len);
 
-				ret = WSAEnumNetworkEvents(sock, sockEvent, &myNetEvents);
-				printf("#1 WSAEnumNetworkEvents ret %d\n", ret);
+				if (WSAEnumNetworkEvents(sock, sockEvent, &myNetEvents)) {
+					LOG("ERROR: WSAEnumNetworkEvents\n");
+					exit(2);
+				}
 
-				buf45[xlen + 1] = '\0';
-				printf("RECEIVED DATA (%d bytes): %s\n", (int)xlen, buf45);
+				len = ip45_to_ipv6(&peer45_addr, buf45, len, (char *)ip6h);
+
+				if (len < 0) {
+					LOG("Invalid IP45 packet\n");
+					continue;
+				}
+
+				/* valid IP45 packet */
+				ip45h = (struct ip45hdr_p3 *)buf45;
+
+				stck45_to_in45(&s45addr, (void *)&peer45_addr.sin_addr, &ip45h->s45stck, ip45h->s45mark);
+
+				if (verbose_opt) {
+					inet_ntop45((char *)&s45addr, saddr, IP45_ADDR_LEN);
+					DEBUG("Received IP45 packet %s->{me}, sid=%016lx, proto=%d\n",
+							saddr,  (unsigned long)ip45h->sid, ip45h->nexthdr);
+				}
+
+ 		     	if (!WriteFile(ptr, buf6, len, NULL, &reading)) {
+					LOG("Cannot write data to ip45/tun interface. Error: %d \n", (int)GetLastError());
+					exit(2);
+				}
+
+/*
+
+				buf45[len + 1] = '\0';
+				printf("RECEIVED DATA (%d bytes): %s\n", (int)len, buf45);
 	
-				xlen = sendto(sock, buf45, xlen, 0, (struct sockaddr *)&client, client_len);
+				len = sendto(sock, buf45, len, 0, (struct sockaddr *)&client, client_len);
 				printf("#1 sendto %d\n", (int)xlen);
+*/
 				break;
 
 			default:
@@ -818,6 +874,23 @@ int main(int argc, char *argv[]) {
 #endif
 	int verbose_opt = 0;
 
+
+#ifdef WIN32
+	WSADATA wsaData; 
+
+	/* initialise and prepare socket */
+	if (WSAStartup(0x0101, &wsaData) != 0) {
+		LOG("Could not open Windows sockets\n");
+		exit(2);
+	}
+#endif
+
+
+	if (inet_pton(AF_INET6, LOCAL_IPV6_ADDR, &local_addr) <= 0) {
+		LOG("Cannot convert IPv6 address\n");
+		exit(1);
+	}
+
 	/* parse input parameters */
 	while ((op = getopt(argc, argv, "Dv?")) != -1) {
 		switch (op) {
@@ -828,6 +901,7 @@ int main(int argc, char *argv[]) {
 			case '?': usage();
 		}
 	}
+
 
 #ifndef WIN32
 	/* daemonize process */

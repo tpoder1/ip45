@@ -682,6 +682,61 @@ int TAP_CONTROL_CODE(int request, int method)
 }
 
 
+/* WINDOWS only: read Neighbor Solicitation message and prepare 
+ * a packet with Neighbor Advertisement */
+int build_nd_adv_pkt(char *buf_sol, int len, char *buf_adv) {
+
+	struct ip6_hdr *ip6h_sol = (void *)buf_sol;
+	struct ip6_hdr *ip6h_adv = (void *)buf_adv;
+	struct icmp6_hdr *icmp6h_sol = (void *)ip6h_sol + sizeof(struct ip6_hdr);
+	struct icmp6_hdr *icmp6h_adv = (void *)ip6h_adv + sizeof(struct ip6_hdr);
+
+
+	if (ip6h_sol->ip6_nxt != IPPROTO_ICMPV6) {
+		return 0;
+	}
+
+	if (icmp6h_sol->icmp6_type != ND_NEIGHBOR_SOLICIT) {
+		return 0;
+	}
+
+	/* copy original packet into new one */
+	memcpy(buf_adv, buf_sol, len);
+
+	icmp6h_adv->icmp6_type = ND_NEIGHBOR_ADVERT;
+
+	/* copy source address from the orriginal packet to the destination */
+	memcpy(&ip6h_adv->ip6_dst, &ip6h_sol->ip6_src, sizeof(struct in6_addr));
+
+	{
+	uint32_t ip6nxt = ip6h_adv->ip6_nxt;
+	uint32_t icmp_len = htonl(len - sizeof(struct ip6_hdr));
+	char xbuf[PKT_BUF_SIZE];
+	int xptr = 0;
+	
+	LOG("ICMP LEN: %x %x\n", icmp_len, len - sizeof(struct ip6_hdr)); 		
+
+	/* an ugly way to cumpute TCP checksum - to be repaired */
+	icmp6h_adv->icmp6_cksum = 0x0;
+	memcpy(xbuf + xptr, (char *)&(ip6h_adv->ip6_src), sizeof(struct in6_addr));
+	xptr += sizeof(ip6h_adv->ip6_src);
+	memcpy(xbuf + xptr, &ip6h_adv->ip6_dst, sizeof(ip6h_adv->ip6_dst));
+	xptr += sizeof(ip6h_adv->ip6_dst);
+	memcpy(xbuf + xptr, &icmp_len, sizeof(uint32_t));
+	xptr += sizeof(uint32_t);
+	memcpy(xbuf + xptr, &ip6nxt, sizeof(ip6nxt));
+	xptr += sizeof(ip6nxt);
+	memcpy(xbuf + xptr, icmp6h_adv, len - sizeof(struct ip6_hdr));
+	xptr += len - sizeof(struct ip6_hdr);
+	icmp6h_adv->icmp6_cksum = inet_cksum(xbuf, xptr);
+
+	LOG("ICMP CKSUM: %x\n", icmp6h_adv->icmp6_cksum); 		
+	}
+
+	return len;
+}
+
+
 /* WINDOWS only: main loop */
 int main_loop_win(int verbose_opt) {
 	DWORD len;
@@ -777,10 +832,16 @@ int main_loop_win(int verbose_opt) {
 					struct icmp6_hdr *icmp6h = (void *)ip6h + sizeof(struct ip6_hdr);
 					char buf_adv[PKT_BUF_SIZE];
 
-					LOG("ICMP v6\n");
 					if (icmp6h->icmp6_type == ND_NEIGHBOR_SOLICIT)  {
-						len = build_nd_adv(buf6, len, buf_adv);
+						len = build_nd_adv_pkt(buf6, len, buf_adv);
 						LOG("ICMP solic v6\n");
+//						continue;
+
+						/* inject ICMPv6 packet with response */
+ 		     			if (!WriteFile(ptr, buf_adv, len, NULL, &reading)) {
+							LOG("Cannot write ICMPv6 data.  Error: %d \n", (int)GetLastError());
+							exit(2);
+						}
 						continue;
 					}
 				}

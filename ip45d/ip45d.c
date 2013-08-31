@@ -688,36 +688,45 @@ int build_nd_adv_pkt(char *buf_sol, int len, char *buf_adv) {
 
 	struct ip6_hdr *ip6h_sol = (void *)buf_sol;
 	struct ip6_hdr *ip6h_adv = (void *)buf_adv;
-	struct icmp6_hdr *icmp6h_sol = (void *)ip6h_sol + sizeof(struct ip6_hdr);
-	struct icmp6_hdr *icmp6h_adv = (void *)ip6h_adv + sizeof(struct ip6_hdr);
+	struct nd_neighbor_solicit *icmp6h_sol = (void *)ip6h_sol + sizeof(struct ip6_hdr);
+	struct nd_neighbor_advert *icmp6h_adv = (void *)ip6h_adv + sizeof(struct ip6_hdr);
+	char *nd_mac_opts = (void *)icmp6h_adv + sizeof(struct nd_neighbor_advert);
 
 
 	if (ip6h_sol->ip6_nxt != IPPROTO_ICMPV6) {
 		return 0;
 	}
 
-	if (icmp6h_sol->icmp6_type != ND_NEIGHBOR_SOLICIT) {
+	if (icmp6h_sol->nd_ns_type != ND_NEIGHBOR_SOLICIT) {
 		return 0;
 	}
 
 	/* copy original packet into new one */
 	memcpy(buf_adv, buf_sol, len);
 
-	icmp6h_adv->icmp6_type = ND_NEIGHBOR_ADVERT;
+	icmp6h_adv->nd_na_type = ND_NEIGHBOR_ADVERT;
 
 	/* copy source address from the orriginal packet to the destination */
 	memcpy(&ip6h_adv->ip6_dst, &ip6h_sol->ip6_src, sizeof(struct in6_addr));
+	/* requested target */
+	memcpy(&ip6h_adv->ip6_src, &icmp6h_sol->nd_ns_target, sizeof(struct in6_addr));
+
+	/* set MAC address */
+	/* 0 - address type, 1 - addr length, 2 - 7 address */
+//	nd_mac_opts[2] = 0xc;
+//	nd_mac_opts[3] = 0xd;
+//	nd_mac_opts[6] = 0xa;
+	nd_mac_opts[7] = 0xb;
+	
 
 	{
-	uint32_t ip6nxt = ip6h_adv->ip6_nxt;
+	uint32_t ip6nxt = htonl(ip6h_adv->ip6_nxt);
 	uint32_t icmp_len = htonl(len - sizeof(struct ip6_hdr));
 	char xbuf[PKT_BUF_SIZE];
-	int xptr = 0;
+	int xptr = 0; 
 	
-	LOG("ICMP LEN: %x %x\n", icmp_len, len - sizeof(struct ip6_hdr)); 		
-
 	/* an ugly way to cumpute TCP checksum - to be repaired */
-	icmp6h_adv->icmp6_cksum = 0x0;
+	icmp6h_adv->nd_na_cksum = 0x0;
 	memcpy(xbuf + xptr, (char *)&(ip6h_adv->ip6_src), sizeof(struct in6_addr));
 	xptr += sizeof(ip6h_adv->ip6_src);
 	memcpy(xbuf + xptr, &ip6h_adv->ip6_dst, sizeof(ip6h_adv->ip6_dst));
@@ -728,9 +737,8 @@ int build_nd_adv_pkt(char *buf_sol, int len, char *buf_adv) {
 	xptr += sizeof(ip6nxt);
 	memcpy(xbuf + xptr, icmp6h_adv, len - sizeof(struct ip6_hdr));
 	xptr += len - sizeof(struct ip6_hdr);
-	icmp6h_adv->icmp6_cksum = inet_cksum(xbuf, xptr);
+	icmp6h_adv->nd_na_cksum = inet_cksum(xbuf, xptr);
 
-	LOG("ICMP CKSUM: %x\n", icmp6h_adv->icmp6_cksum); 		
 	}
 
 	return len;

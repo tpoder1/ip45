@@ -25,6 +25,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include "tap-windows.h"
+#include "ether.h"
 #include "ip6.h"
 #include "icmp6.h"
 #include "compat_win.h"
@@ -684,10 +685,12 @@ int TAP_CONTROL_CODE(int request, int method)
 
 /* WINDOWS only: read Neighbor Solicitation message and prepare 
  * a packet with Neighbor Advertisement */
-int build_nd_adv_pkt(char *buf_sol, int len, char *buf_adv) {
+int build_nd_adv_pkt(char *virt_mac, char *buf_sol, int len, char *buf_adv) {
 
-	struct ip6_hdr *ip6h_sol = (void *)buf_sol;
-	struct ip6_hdr *ip6h_adv = (void *)buf_adv;
+	struct ethhdr *eth_sol = (void *)buf_sol;
+	struct ethhdr *eth_adv = (void *)buf_adv;
+	struct ip6_hdr *ip6h_sol = (void *)buf_sol + sizeof(struct ethhdr);
+	struct ip6_hdr *ip6h_adv = (void *)buf_adv + sizeof(struct ethhdr);
 	struct nd_neighbor_solicit *icmp6h_sol = (void *)ip6h_sol + sizeof(struct ip6_hdr);
 	struct nd_neighbor_advert *icmp6h_adv = (void *)ip6h_adv + sizeof(struct ip6_hdr);
 	char *nd_mac_opts = (void *)icmp6h_adv + sizeof(struct nd_neighbor_advert);
@@ -711,17 +714,18 @@ int build_nd_adv_pkt(char *buf_sol, int len, char *buf_adv) {
 	/* requested target */
 	memcpy(&ip6h_adv->ip6_src, &icmp6h_sol->nd_ns_target, sizeof(struct in6_addr));
 
+	/* set sollicited and override flag */
+	icmp6h_adv->nd_na_flags_reserved = htonl(ND_NA_FLAG_SOLICITED | ND_NA_FLAG_OVERRIDE);
+
 	/* set MAC address */
 	/* 0 - address type, 1 - addr length, 2 - 7 address */
-//	nd_mac_opts[2] = 0xc;
-//	nd_mac_opts[3] = 0xd;
-//	nd_mac_opts[6] = 0xa;
-	nd_mac_opts[7] = 0xb;
-	
+	nd_mac_opts[0] = ND_OPT_TARGET_LINKADDR; /* 0x1 - source link address, 0x2 - target link address */
+	memcpy(nd_mac_opts + 2, virt_mac, ETH_ALEN);
+
 
 	{
 	uint32_t ip6nxt = htonl(ip6h_adv->ip6_nxt);
-	uint32_t icmp_len = htonl(len - sizeof(struct ip6_hdr));
+	uint32_t icmp_len = htonl(len - sizeof(struct ip6_hdr) - sizeof(struct ethhdr));
 	char xbuf[PKT_BUF_SIZE];
 	int xptr = 0; 
 	
@@ -735,12 +739,16 @@ int build_nd_adv_pkt(char *buf_sol, int len, char *buf_adv) {
 	xptr += sizeof(uint32_t);
 	memcpy(xbuf + xptr, &ip6nxt, sizeof(ip6nxt));
 	xptr += sizeof(ip6nxt);
-	memcpy(xbuf + xptr, icmp6h_adv, len - sizeof(struct ip6_hdr));
-	xptr += len - sizeof(struct ip6_hdr);
+	memcpy(xbuf + xptr, icmp6h_adv, ntohl(icmp_len));
+	xptr += ntohl(icmp_len);
 	icmp6h_adv->nd_na_cksum = inet_cksum(xbuf, xptr);
 
 	}
 
+	/* fill ethernet header */
+	eth_adv->h_proto = htons(ETH_P_IPV6);
+	memcpy(eth_adv->h_dest, eth_sol->h_source, ETH_ALEN);
+	memcpy(eth_adv->h_source, virt_mac, ETH_ALEN);
 	return len;
 }
 
@@ -758,12 +766,17 @@ int main_loop_win(int verbose_opt) {
 	char devGuid[1000];
 	char devHuman[1000];
 	char fileName[1000];
+	char ebuf6[PKT_BUF_SIZE];
+	char *buf6 = ebuf6 + sizeof(struct ethhdr);
 	char buf45[PKT_BUF_SIZE];
-	char buf6[PKT_BUF_SIZE];
-	struct ip6_hdr *ip6h = (struct ip6_hdr *)buf6;
+	struct ethhdr *eth6 = (struct ethhdr *)ebuf6;
 	struct ip45hdr_p3 *ip45h = (struct ip45hdr_p3 *)buf45;
+	struct ip6_hdr *ip6h = (struct ip6_hdr *)buf6;
 	char saddr[IP45_ADDR_LEN];
 	char daddr[IP45_ADDR_LEN];
+
+	char virt_mac[ETH_ALEN] = { 0x00, 0x00, 0x93, 0x92, 0xD7, 0x8F };
+	char host_mac[ETH_ALEN] = { 0x00, 0xFF, 0x93, 0x92, 0xD7, 0x8F };
 	
 	struct in45_addr s45addr;
 	WSAEVENT sockEvent;
@@ -795,15 +808,11 @@ int main_loop_win(int verbose_opt) {
 
 	pstatus = 1;	
 	DeviceIoControl(ptr, TAP_WIN_IOCTL_SET_MEDIA_STATUS, &pstatus, 4, &pstatus, 4, &len, NULL);
-	DeviceIoControl(ptr, TAP_WIN_IOCTL_CONFIG_TUN, ptun, 12, ptun, 12, &len, NULL);
+	/* set device to TUN mode (without Ethernet frame) */
+//	DeviceIoControl(ptr, TAP_WIN_IOCTL_CONFIG_TUN, ptun, 12, ptun, 12, &len, NULL);
 
-//	memset(&writing, 0, sizeof(writing));
 	memset(&reading, 0, sizeof(reading));
 	reading.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);	
-	//writing.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);	
-	//reading.OffsetHigh = 10000;
-
-		
 
 	if ((sock = init_sock()) < 0) {
 		LOG("Cant initialize ip45 socket\n");
@@ -822,7 +831,8 @@ int main_loop_win(int verbose_opt) {
 //		int addrlen;
 		WSANETWORKEVENTS myNetEvents;
 
-		ReadFile(ptr, buf6, PKT_BUF_SIZE, NULL, &reading);
+		//ReadFile(ptr, buf6, PKT_BUF_SIZE, NULL, &reading);
+		ReadFile(ptr, ebuf6, PKT_BUF_SIZE, NULL, &reading);
 
 		dwEvent = WaitForMultipleObjects(2, objectsHnd, FALSE, INFINITE);
 	
@@ -835,13 +845,18 @@ int main_loop_win(int verbose_opt) {
 					continue;
 				}
 
+				if (ntohs(eth6->h_proto) != ETH_P_IPV6) {
+		//			LOG("Protocol: %04x, skipping\n", ntohs(eth6->h_proto));
+					continue;
+				}
+
 				/* check NS packets and inject the response */
 				if (ip6h->ip6_nxt == IPPROTO_ICMPV6) {
 					struct icmp6_hdr *icmp6h = (void *)ip6h + sizeof(struct ip6_hdr);
 					char buf_adv[PKT_BUF_SIZE];
 
 					if (icmp6h->icmp6_type == ND_NEIGHBOR_SOLICIT)  {
-						len = build_nd_adv_pkt(buf6, len, buf_adv);
+						len = build_nd_adv_pkt(virt_mac, ebuf6, len, buf_adv);
 						LOG("ICMP solic v6\n");
 //						continue;
 
@@ -854,6 +869,7 @@ int main_loop_win(int verbose_opt) {
 					}
 				}
 
+				len -= sizeof(struct ethhdr);
 				len = ipv6_to_ip45(buf6, len, buf45, &peer45_addr);
 
 				if ((int)len <= 0 ) {
@@ -904,6 +920,11 @@ int main_loop_win(int verbose_opt) {
 					DEBUG("Received IP45 packet %s->{me}, sid=%016lx, proto=%d\n",
 							saddr,  (unsigned long)ip45h->sid, ip45h->nexthdr);
 				}
+
+				eth6->h_proto = htons(ETH_P_IPV6);
+				memcpy(eth6->h_dest, host_mac, ETH_ALEN);
+				memcpy(eth6->h_source, virt_mac, ETH_ALEN);
+				len += sizeof(struct ethhdr);
 
  		     	if (!WriteFile(ptr, buf6, len, NULL, &reading)) {
 					LOG("Cannot write data to ip45/tun interface. Error: %d \n", (int)GetLastError());

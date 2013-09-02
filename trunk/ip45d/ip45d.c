@@ -926,6 +926,8 @@ int main_loop_win(int verbose_opt) {
 				memcpy(eth6->h_source, virt_mac, ETH_ALEN);
 				len += sizeof(struct ethhdr);
 
+				LOG("SEND DATA \n");
+
  		     	if (!WriteFile(ptr, buf6, len, NULL, &reading)) {
 					LOG("Cannot write data to ip45/tun interface. Error: %d \n", (int)GetLastError());
 					exit(2);

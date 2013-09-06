@@ -76,13 +76,16 @@
 
 #define LOCAL_IPV6_ADDR "0:0:0:0:0:1:0:0"
 
-unsigned char local_addr[16] =
-	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x3 };
 
+unsigned char local_addr[16];
+
+/*
 
 struct null_hdr {
 	uint32_t family;
 } null_drt_t;
+
+*/
 
 
 #ifdef WIN32
@@ -811,7 +814,7 @@ DWORD WINAPI tun_to_sock_loop(  LPVOID lpParam ) {
 //		int addrlen;
 //		WSANETWORKEVENTS myNetEvents;
 		int rc;
-	       	DWORD write_len;
+		//DWORD write_len;
 
 
 		ReadFile(ptr, rcv_ebuf6, PKT_BUF_SIZE, NULL, &olReading);
@@ -819,22 +822,12 @@ DWORD WINAPI tun_to_sock_loop(  LPVOID lpParam ) {
 		WaitForSingleObject(olReading.hEvent, INFINITE);
 
 		if (!GetOverlappedResult(ptr, &olReading, &tun_len, FALSE) || tun_len <= 0) {
-                    LOG("Cannot read data GetOverlappedResult\n");
-                    continue;
-                }
-
-/*
-		if (!ReadFile(ptr, rcv_ebuf6, PKT_BUF_SIZE, &tun_len, NULL)) {
-			LOG("Error reading tap\n");
+			LOG("Cannot read data GetOverlappedResult\n");
 			continue;
 		}
-		*/
 
-
-			
 
 		if (ntohs(rcv_eth6->h_proto) != ETH_P_IPV6) {
-	//		LOG("Protocol: %04x, skipping\n", ntohs(eth6->h_proto));
 			continue;
 		}
 
@@ -872,8 +865,6 @@ DWORD WINAPI tun_to_sock_loop(  LPVOID lpParam ) {
 			DEBUG("Received IPv6 packet %s -> %s, proto=%d bytes=%d\n",
 					saddr, daddr, rcv_ip6h->ip6_nxt, (int)tun_len);
 //		}
-
-		//snd_len = sendto(sock, snd_buf45, snd_len, 0,
 
 		SndBuf.len = snd_len;
 		SndBuf.buf = snd_buf45;
@@ -920,7 +911,8 @@ DWORD WINAPI sock_to_tun_loop(  LPVOID lpParam ) {
 	while(1) {
 		DWORD sock_len;
 //		DWORD tun_len;
-		DWORD snd_len, write_len;
+		DWORD snd_len;
+// write_len;
 //		DWORD dwEvent;
 //		int addrlen;
 //		WSANETWORKEVENTS myNetEvents;
@@ -933,7 +925,6 @@ DWORD WINAPI sock_to_tun_loop(  LPVOID lpParam ) {
 		}
 		*/
 
-		LOG("XXX2\n");
 		if ( (int)sock_len < sizeof(struct ip45hdr_p3) ) {
 			LOG("Received too short IP45 packet\n");
 			continue;

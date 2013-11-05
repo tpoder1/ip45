@@ -6,7 +6,9 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <fcntl.h>
-#include <netinet/in.h>
+
+
+
 #include <ip45.h>
 
 struct session_entry_t  {

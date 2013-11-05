@@ -4,11 +4,12 @@
 */
 
 #ifndef _NET_IP45_H
-#define _NET_IP45_H "2013-08-26 01"
+#define _NET_IP45_H "2013-11-05 01"
 
-#ifdef linux 
+#ifdef __linux 
 #include <linux/types.h>
 #include <asm/byteorder.h>
+//#include <netinet/in.h>
 //#include <net/inet_sock.h>
 //#include <endian.h>
 #ifdef __LITTLE_ENDIAN 
@@ -54,6 +55,22 @@ struct in45_stck
 #define s45_stck32       in45s_u.u45_stck32
 };
 
+/* IP45 SID - session ID */
+struct in45_sid
+{
+    union
+    {
+        uint8_t       u45_sid8[16];
+        uint16_t      u45_sid16[8];
+        uint32_t      u45_sid32[4];
+        uint64_t      u45_sid64[2];
+    } sid45_u;
+#define s45_sid         sid55_u.u45_sid8
+#define s45_sid16       sid45_u.u45_sid16
+#define s45_sid32       sid45_u.u45_sid32
+#define s45_sid64       sid45_u.u45_sid64
+};
+
 /* IP45 header (standart IP header with no options + extra IP45 header */
 struct ip45hdr {
 #if defined(__LITTLE_ENDIAN__)
@@ -93,7 +110,7 @@ struct ip45hdr {
 	uint16_t	check45;
 	struct in45_stck	s45stck;
 	struct in45_stck	d45stck;
-	uint64_t	sid;  
+	struct in45_sid		sid;  
 	/* no IP options allowed in IP4.5 */
 };
 
@@ -114,7 +131,7 @@ struct ip45hdr_p3 {
 	uint16_t	check45;
 	struct in45_stck	s45stck;
 	struct in45_stck	d45stck;
-	uint64_t	sid;  
+	struct in45_sid		sid;  
 	/* no IP options allowed in IP4.5 */
 };
 
@@ -122,7 +139,7 @@ struct ip45hdr_p3 {
 
 struct sockaddr_in45 {
 	sa_family_t			sin45_family;	/* Address family		*/
-	uint16_t				sin45_port;		/* Port number			*/
+	uint16_t			sin45_port;		/* Port number			*/
 	struct in45_addr	sin45_addr;
 
 };

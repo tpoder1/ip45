@@ -45,12 +45,12 @@ static void ip45bgw_log(
 	char str[], 
 	struct ip45hdr *ip45h)
 {
-	printk(KERN_INFO "NF IP45: %s " NIPFMT ":%d -> " NIPFMT ":%d [IP45 " NIP45FMT "/%d -> " NIP45FMT "/%d] [SID:%lX] \n", str,
+	printk(KERN_INFO "NF IP45: %s " NIPFMT ":%d -> " NIPFMT ":%d [IP45 " NIP45FMT "/%d -> " NIP45FMT "/%d] [SID:%lX:%lX] \n", str,
 			NIPQUAD(ip45h->saddr), ntohs(ip45h->ip45sp),
 			NIPQUAD(ip45h->daddr), ntohs(ip45h->ip45dp),
 			NIP45QUAD(ip45h->s45stck), ip45h->s45mark,
 			NIP45QUAD(ip45h->d45stck), ip45h->d45mark,
-			(unsigned long)ip45h->sid);
+			(unsigned long)ip45h->sid.s45_sid64[0], (unsigned long)ip45h->sid.s45_sid64[1]);
 
 }
 

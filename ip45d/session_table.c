@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <stdint.h>
 #include "session_table.h"
+#include <ip45.h>
 
 /* init session table  */
 void session_table_init(struct session_table_t *table) {
@@ -15,7 +16,7 @@ void session_table_init(struct session_table_t *table) {
 }
 
 /* add a new record into session table */
-/* returns poitern to entry or null if memory is not available */
+/* returns poiter to entry or null if memory is not available */
 struct session_entry_t *session_table_add(struct session_table_t *table, struct session_entry_t *entry) {
 
 	struct session_entry_t *new;
@@ -36,13 +37,13 @@ struct session_entry_t *session_table_add(struct session_table_t *table, struct 
 
 /* lookup entry in the session_table */
 /* returns pointer to foud recor or NULL if matching record does not exists */
-struct session_entry_t* session_table_lookup_sid(struct session_table_t *table, uint64_t sid) {
+struct session_entry_t* session_table_lookup_sid(struct session_table_t *table, struct in45_sid *sid) {
 	
 	struct session_entry_t *tmp; 
 	tmp = table->head; 
 
 	while (tmp != NULL) {
-		if (tmp->sid == sid) {
+		if (tmp->sid.s45_sid64[0] == sid->s45_sid64[0] && tmp->sid.s45_sid64[1] == sid->s45_sid64[1]) {
 			return tmp;	
 		}
 		tmp = tmp->next;

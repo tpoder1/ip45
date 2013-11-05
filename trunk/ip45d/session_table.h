@@ -5,6 +5,9 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <ip45.h>
 
 struct session_entry_t  {
 	uint64_t init_s45addr[2];
@@ -15,7 +18,7 @@ struct session_entry_t  {
 	uint8_t proto;
 	uint16_t sport;
 	uint16_t dport;
-	uint64_t sid;
+	struct in45_sid sid;
 	struct session_entry_t *next;
 } sesion_entry; 
 
@@ -26,7 +29,7 @@ struct session_table_t {
 
 void session_table_init(struct session_table_t *table);
 struct session_entry_t *session_table_add(struct session_table_t *table, struct session_entry_t *entry);
-struct session_entry_t* session_table_lookup_sid(struct session_table_t *table, uint64_t sid);
+struct session_entry_t* session_table_lookup_sid(struct session_table_t *table, struct in45_sid *sid);
 struct session_entry_t* session_table_lookup(struct session_table_t *table, 
 	uint16_t sport, uint16_t dport, uint8_t proto);
 	

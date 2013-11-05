@@ -63,7 +63,7 @@
 #endif
 
 #include <fcntl.h>
-#include "ip45.h"
+#include <ip45.h>
 #include "inet_ntop45.h"
 #include "session_table.h"
 
@@ -178,7 +178,7 @@ ssize_t ip45_to_ipv6(struct sockaddr_in *peer45_addr, char *ip45pkt, ssize_t len
 	ip6h->ip6_hlim = 2;	/*  hop limit */ 
 
 	/* lookup for SID */
-	ses_rec = session_table_lookup_sid(&sessions, ip45h->sid);
+	ses_rec = session_table_lookup_sid(&sessions, &ip45h->sid);
 	if (ses_rec == NULL) {	/* the session not seen before */
 		struct session_entry_t tmp;
 
@@ -190,10 +190,13 @@ ssize_t ip45_to_ipv6(struct sockaddr_in *peer45_addr, char *ip45pkt, ssize_t len
 		}
 	
 		tmp.proto = ip45h->nexthdr;
-		tmp.sid = ip45h->sid;
+		tmp.sid.s45_sid64[0] = ip45h->sid.s45_sid64[0];
+		tmp.sid.s45_sid64[1] = ip45h->sid.s45_sid64[1];
 		tmp.last_45port = ntohs(peer45_addr->sin_port);
 		ses_rec = session_table_add(&sessions, &tmp);
-		DEBUG("New remote session sid:%lx\n", (unsigned long)ip45h->sid);
+		DEBUG("New remote session sid:%lx:%lx\n", 
+					(unsigned long)ip45h->sid.s45_sid64[0], 
+					(unsigned long)ip45h->sid.s45_sid64[1]);
 	}
 
 	memcpy(&ses_rec->last_s45addr, &s45addr, sizeof(struct in45_addr));
@@ -312,10 +315,13 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt, struct sockaddr_
 		tmp.proto = ip6h->ip6_nxt;
 		tmp.sport = dport;
 		tmp.dport = sport;
-		tmp.sid = rand();
+		tmp.sid.s45_sid64[0] = rand();
+		tmp.sid.s45_sid64[1] = rand();
 		tmp.last_45port = IP45_COMPAT_UDP_PORT;
 		ses_rec = session_table_add(&sessions, &tmp);
-		DEBUG("new sid %lx created\n", (unsigned long)tmp.sid);
+		DEBUG("new sid %lx:%lx created\n", 
+				(unsigned long)tmp.sid.s45_sid64[0], 
+				(unsigned long)tmp.sid.s45_sid64[1]);
 	}
 
 	/* create IP45 header */
@@ -323,7 +329,8 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt, struct sockaddr_
 
 
 	ip45h->nexthdr = ip6h->ip6_nxt;		/* next header */
-	ip45h->sid = ses_rec->sid;
+	ip45h->sid.s45_sid64[0] = ses_rec->sid.s45_sid64[0];
+	ip45h->sid.s45_sid64[1] = ses_rec->sid.s45_sid64[1];
 	peer45_addr->sin_family = AF_INET;
 	peer45_addr->sin_port = htons(ses_rec->last_45port);
 
@@ -553,9 +560,11 @@ int main_loop_posix(int verbose_opt) {
 			if (verbose_opt) {
 				inet_ntop45((char *)&s45addr, saddr, IP45_ADDR_LEN);
 		
-				DEBUG("Received IP45 packet %s->{me}, sid=%016lx, proto=%d\n", 
+				DEBUG("Received IP45 packet %s->{me}, sid=%016lx:%016lx, proto=%d\n", 
 					saddr,  
-					(unsigned long)ip45h->sid, ip45h->nexthdr);
+					(unsigned long)ip45h->sid.s45_sid64[0], 
+					(unsigned long)ip45h->sid.s45_sid64[1], 
+					ip45h->nexthdr);
 			}
 
 
@@ -946,8 +955,11 @@ DWORD WINAPI sock_to_tun_loop(  LPVOID lpParam ) {
 
 //		if (verbose_opt) {
 			inet_ntop45((char *)&s45addr, saddr, IP45_ADDR_LEN);
-			DEBUG("Received IP45 packet %s->{me}, sid=%016lx, proto=%d, bytes=%d\n",
-				saddr,  (unsigned long)rcv_ip45h->sid, rcv_ip45h->nexthdr, (int)sock_len);
+			DEBUG("Received IP45 packet %s->{me}, sid=%016lx:%016lx, proto=%d, bytes=%d\n",
+				saddr,  
+				(unsigned long)rcv_ip45h->sid.s45_sid64[0], 
+				(unsigned long)rcv_ip45h->sid.s45_sid64[1], 
+				rcv_ip45h->nexthdr, (int)sock_len);
 //		}
 
 		snd_eth6->h_proto = htons(ETH_P_IPV6);

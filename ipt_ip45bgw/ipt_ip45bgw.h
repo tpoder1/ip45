@@ -9,6 +9,7 @@
 #define IPT_IP45_DOWNSTREAM "downstream-prefix"
 #define IPT_IP45_UPSTREAM "upstream-addr"
 #define IPT_IP45_LOG "log"
+#define IPT_IP45_LOG_PREFIX "IP45 BGW: "
 
 #define IPT_IP45_OPT_DOWNSTREAM 0x01
 #define IPT_IP45_OPT_UPSTREAM 0x02

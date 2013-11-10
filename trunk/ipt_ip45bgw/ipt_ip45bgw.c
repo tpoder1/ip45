@@ -45,7 +45,7 @@ static void ip45bgw_log(
 	char str[], 
 	struct ip45hdr *ip45h)
 {
-	printk(KERN_INFO "NF IP45: %s " NIPFMT ":%d -> " NIPFMT ":%d [IP45 " NIP45FMT "/%d -> " NIP45FMT "/%d] [SID:%lX:%lX] \n", str,
+	printk(KERN_INFO IPT_IP45_LOG_PREFIX "%s " NIPFMT ":%d -> " NIPFMT ":%d [IP45 " NIP45FMT "/%d -> " NIP45FMT "/%d] [SID:%lX:%lX] \n", str,
 			NIPQUAD(ip45h->saddr), ntohs(ip45h->ip45sp),
 			NIPQUAD(ip45h->daddr), ntohs(ip45h->ip45dp),
 			NIP45QUAD(ip45h->s45stck), ip45h->s45mark,
@@ -65,22 +65,20 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 	int shlen = (32 - info->downstream_len) / 8; /* number of octets to shift */
 	int log = IPT_IP45_OPT_LOG & info->ip45flags;
 
-
-	if (!skb_make_writable(skb, sizeof(struct ip45hdr))) {
-		pr_devel("IP45: unwriteable, dropped\n");
-		return NF_DROP;
-	}
-
 	/* check values in header - if the packet is not valit IP45 packet skipp bgw operations */
 	if (!is_ip45_pkt(ip45h)) {
 		if ( log ) {
-			printk(KERN_INFO "NOT VALID IP45 PACKET " NIPFMT ":%d -> " NIPFMT ":%d ",
+			printk(KERN_INFO IPT_IP45_LOG_PREFIX "NOT VALID IP45 PACKET " NIPFMT ":%d -> " NIPFMT ":%d (%d)",
 					NIPQUAD(ip45h->saddr), ntohs(ip45h->ip45sp),
-					NIPQUAD(ip45h->daddr), ntohs(ip45h->ip45dp));
+					NIPQUAD(ip45h->daddr), ntohs(ip45h->ip45dp), ip45h->protocol);
 		}
 		return XT_CONTINUE;
 	}
 
+	if (!skb_make_writable(skb, sizeof(struct ip45hdr))) {
+		pr_devel(IPT_IP45_LOG_PREFIX "unwriteable, dropped\n");
+		return NF_DROP;
+	}
 
 	if ( log ) {
 		ip45bgw_log("INPUT", ip45h);
@@ -112,6 +110,10 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 			return NF_DROP;
 		}
 
+		if ( log ) {
+			ip45bgw_log("OUTPUT (DP MATCH)", ip45h);
+		}
+		return NF_ACCEPT;
 	}
 
 	/* test whether the destination address is upstream address 
@@ -132,10 +134,15 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 			csum_replace4(&ip45h->check1, oldip, ip45h->daddr);
 			ip45h->ip45ze = 0x0;
 		}
+
+		if ( log ) {
+			ip45bgw_log("OUTPUT (UA MATCH)", ip45h);
+		}
+		return NF_ACCEPT;
 	}
 
 	if ( log ) {
-		ip45bgw_log("OUTPUT", ip45h);
+		ip45bgw_log("OUTPUT (NO MATCH)", ip45h);
 	}
 
 	return XT_CONTINUE;
@@ -159,7 +166,8 @@ static struct xt_target ip45bgw_tg_reg __read_mostly = {
 	.destroy	= NULL,
 	.family		= NFPROTO_IPV4,
 	.targetsize	= sizeof(struct ipt_ip45bgw_info),
-	.table		= "mangle",
+	//.table		= "mangle",
+//	.table		= "nat",
 	.hooks		= (1 << NF_INET_POST_ROUTING) | (1 << NF_INET_PRE_ROUTING) | (1 << NF_INET_FORWARD),
 	.me 		= THIS_MODULE,
 };

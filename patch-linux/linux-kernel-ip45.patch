@@ -1,7 +1,17 @@
 diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net/ipv4/af_inet.c linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/af_inet.c
 --- linux-2.6.32-131.17.1.el6.orig/net/ipv4/af_inet.c	2011-09-29 15:32:30.000000000 +0200
-+++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/af_inet.c	2012-11-10 21:11:47.209769822 +0100
-@@ -518,6 +518,9 @@ int inet_bind(struct socket *sock, struc
++++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/af_inet.c	2013-01-30 15:47:09.000000000 +0100
+@@ -115,6 +115,9 @@
+ #ifdef CONFIG_IP_MROUTE
+ #include <linux/mroute.h>
+ #endif
++#ifdef CONFIG_IP45
++#include <net/ip45.h>
++#endif
+ 
+ 
+ /* The inetsw table contains everything that inet_create needs to
+@@ -518,6 +521,9 @@ int inet_bind(struct socket *sock, struc
  	inet->sport = htons(inet->num);
  	inet->daddr = 0;
  	inet->dport = 0;
@@ -11,7 +21,15 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  	sk_dst_reset(sk);
  	err = 0;
  out_release_sock:
-@@ -1665,6 +1668,11 @@ static int __init inet_init(void)
+@@ -983,7 +989,6 @@ static struct inet_protosw inetsw_array[
+ 		.flags =      INET_PROTOSW_PERMANENT,
+        },
+ 
+-
+        {
+ 	       .type =       SOCK_RAW,
+ 	       .protocol =   IPPROTO_IP,	/* wild card */
+@@ -1665,6 +1670,11 @@ static int __init inet_init(void)
  
  	dev_add_pack(&ip_packet_type);
  
@@ -23,10 +41,57 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  	rc = 0;
  out:
  	return rc;
+diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net/ipv4/inet_connection_sock.c linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/inet_connection_sock.c
+--- linux-2.6.32-131.17.1.el6.orig/net/ipv4/inet_connection_sock.c	2011-09-29 15:30:44.000000000 +0200
++++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/inet_connection_sock.c	2013-03-31 14:43:04.744548055 +0200
+@@ -68,6 +68,9 @@ int inet_csk_bind_conflict(const struct 
+ 	 */
+ 
+ 	sk_for_each_bound(sk2, node, &tb->owners) {
++
++		printk(KERN_INFO "IP45 %s : sk=%p, sk2=%p \n", __FUNCTION__, sk, sk2);
++
+ 		if (sk != sk2 &&
+ 		    !inet_v6_ipv6only(sk2) &&
+ 		    (!sk->sk_bound_dev_if ||
+@@ -296,6 +299,22 @@ struct sock *inet_csk_accept(struct sock
+ 	}
+ 
+ 	newsk = reqsk_queue_get_child(&icsk->icsk_accept_queue, sk);
++
++	/* XXX */
++	{
++		struct inet_sock *isk1 = inet_sk(sk);
++		struct inet_sock *isk2 = inet_sk(newsk);
++		printk(KERN_INFO "IP45 %s : sock: %p, newsock: %p (%x:%u -> %x:%u), (%x:%u -> %x:%u), is_ip45: %d \n",  __FUNCTION__, 
++			sk, 
++			newsk,
++			ntohl(isk1->saddr), ntohs(isk1->sport),
++			ntohl(isk1->daddr), ntohs(isk1->dport),
++			ntohl(isk2->saddr), ntohs(isk2->sport),
++			ntohl(isk2->daddr), ntohs(isk2->dport),
++			isk2->is_ip45
++			);
++	}
++
+ 	WARN_ON(newsk->sk_state == TCP_SYN_RECV);
+ out:
+ 	release_sock(sk);
 diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net/ipv4/inet_hashtables.c linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/inet_hashtables.c
 --- linux-2.6.32-131.17.1.el6.orig/net/ipv4/inet_hashtables.c	2011-09-29 15:31:33.000000000 +0200
-+++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/inet_hashtables.c	2012-11-10 21:13:46.658771556 +0100
-@@ -236,6 +236,9 @@ struct sock * __inet_lookup_established(
++++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/inet_hashtables.c	2013-11-08 15:38:29.762692765 +0100
+@@ -215,6 +215,10 @@ begin:
+ 		}
+ 	}
+ 	rcu_read_unlock();
++
++	printk(KERN_INFO "IP45  %s() #1.0 : sk: %p, hash: %x, hiscore: %x\n", __FUNCTION__, 
++			result, hash, hiscore);
++
+ 	return result;
+ }
+ EXPORT_SYMBOL_GPL(__inet_lookup_listener);
+@@ -236,6 +240,9 @@ struct sock * __inet_lookup_established(
  	unsigned int slot = hash & (hashinfo->ehash_size - 1);
  	struct inet_ehash_bucket *head = &hashinfo->ehash[slot];
  
@@ -36,14 +101,14 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  	rcu_read_lock();
  begin:
  	sk_nulls_for_each_rcu(sk, node, &head->chain) {
-@@ -290,6 +293,84 @@ out:
+@@ -290,6 +297,84 @@ out:
  }
  EXPORT_SYMBOL_GPL(__inet_lookup_established);
  
 +#ifdef CONFIG_IP45
 +struct sock * __inet45_lookup_established(struct net *net,
 +				  struct inet_hashinfo *hashinfo,
-+				  const __be64 sid,
++				  const struct in45_sid * psid,
 +				const __be16 sport,
 +				const u16 hnum,
 +				  const int dif)
@@ -57,18 +122,18 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
 +	 */
 +	// IP45 XXX
 +	//unsigned int hash = inet_ehashfn(net, daddr, hnum, saddr, sport);
-+	unsigned int hash = inet45_ehashfn(net, sid, hnum, sport);
++	unsigned int hash = inet45_ehashfn(net, psid, hnum, sport);
 +	unsigned int slot = hash & (hashinfo->ehash_size - 1);
 +	struct inet_ehash_bucket *head = &hashinfo->ehash[slot];
 +
 +	rcu_read_lock();
 +begin:
 +	sk_nulls_for_each_rcu(sk, node, &head->chain) {
-+		if (INET45_MATCH(sk, net, hash, sid,
++		if (INET45_MATCH(sk, net, hash, psid,
 +					ports, dif)) {
 +			if (unlikely(!atomic_inc_not_zero(&sk->sk_refcnt)))
 +				goto begintw;
-+			if (unlikely(!INET45_MATCH(sk, net, hash, sid,
++			if (unlikely(!INET45_MATCH(sk, net, hash, psid,
 +				ports, dif))) {
 +				sock_put(sk);
 +				goto begin;
@@ -87,13 +152,13 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
 +begintw:
 +	/* Must check for a TIME_WAIT'er before going to listener hash. */
 +	sk_nulls_for_each_rcu(sk, node, &head->twchain) {
-+		if (INET45_TW_MATCH(sk, net, hash, sid,
++		if (INET45_TW_MATCH(sk, net, hash, psid,
 +					ports, dif)) {
 +			if (unlikely(!atomic_inc_not_zero(&sk->sk_refcnt))) {
 +				sk = NULL;
 +				goto out;
 +			}
-+			if (unlikely(!INET45_TW_MATCH(sk, net, hash, sid,
++			if (unlikely(!INET45_TW_MATCH(sk, net, hash, psid,
 +				 ports, dif))) {
 +				sock_put(sk);
 +				goto begintw;
@@ -121,7 +186,7 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  /* called with local bh disabled */
  static int __inet_check_established(struct inet_timewait_death_row *death_row,
  				    struct sock *sk, __u16 lport,
-@@ -378,7 +459,14 @@ void __inet_hash_nolisten(struct sock *s
+@@ -378,7 +463,14 @@ void __inet_hash_nolisten(struct sock *s
  
  	WARN_ON(!sk_unhashed(sk));
  
@@ -138,7 +203,7 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  	lock = inet_ehash_lockp(hashinfo, sk->sk_hash);
 diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net/ipv4/ip_input.c linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/ip_input.c
 --- linux-2.6.32-131.17.1.el6.orig/net/ipv4/ip_input.c	2009-12-03 04:51:21.000000000 +0100
-+++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/ip_input.c	2012-11-10 21:14:41.260767382 +0100
++++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/ip_input.c	2013-11-08 15:55:56.246704679 +0100
 @@ -131,6 +131,9 @@
  
  #include <net/snmp.h>
@@ -149,12 +214,12 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  #include <net/protocol.h>
  #include <net/route.h>
  #include <linux/skbuff.h>
-@@ -204,6 +207,25 @@ static int ip_local_deliver_finish(struc
+@@ -204,6 +207,29 @@ static int ip_local_deliver_finish(struc
  		int hash, raw;
  		const struct net_protocol *ipprot;
  
 +#ifdef CONFIG_IP45		
-+		if (is_ip45(skb)) {
++		if (is_ip45_skb(skb)) {
 +
 +			struct ip45hdr *iph = ip45_hdr(skb);
 +#ifdef CONFIG_IP45_DEBUG
@@ -167,7 +232,11 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
 +			protocol = iph->nexthdr;
 +
 +#ifdef CONFIG_IP45_DEBUG
-+			printk(KERN_INFO "IP45 FOUND %s() ON RCV #1 : nexthdr: %d, SID %lX, *inet %p\n", __FUNCTION__, protocol, (unsigned long)iph->sid, (void *)inet);
++			printk(KERN_INFO "IP45 FOUND %s() ON RCV #1 : nexthdr: %d, SID %lX:%lX, *inet %p\n", __FUNCTION__, 
++				protocol, 
++				(unsigned long)iph->sid.s45_sid64[0], 
++				(unsigned long)iph->sid.s45_sid64[1], 
++				(void *)inet);
 +#endif
 +
 +		}
@@ -177,7 +246,7 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  
 diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net/ipv4/ip_output.c linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/ip_output.c
 --- linux-2.6.32-131.17.1.el6.orig/net/ipv4/ip_output.c	2011-09-29 15:32:36.000000000 +0200
-+++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/ip_output.c	2012-11-10 21:15:43.732241330 +0100
++++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/ip_output.c	2013-11-08 16:01:57.163755827 +0100
 @@ -73,6 +73,9 @@
  #include <net/icmp.h>
  #include <net/checksum.h>
@@ -188,7 +257,7 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  #include <linux/igmp.h>
  #include <linux/netfilter_ipv4.h>
  #include <linux/netfilter_bridge.h>
-@@ -113,6 +116,84 @@ int ip_local_out(struct sk_buff *skb)
+@@ -113,6 +116,89 @@ int ip_local_out(struct sk_buff *skb)
  {
  	int err;
  
@@ -202,8 +271,11 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
 +		struct ip45hdr *ip45h;
 +
 +#ifdef CONFIG_IP45_DEBUG
-+		printk(KERN_INFO "IP45 ADDING IP45 HDR %s() #3 : %x->%x (SID:%lx ), inet: %p, skb->len: %d\n", __FUNCTION__, 
-+				iph->saddr, iph->daddr, (unsigned long)inet->sid, inet, skb->len);
++		printk(KERN_INFO "IP45 ADDING IP45 HDR %s() #3 : %x->%x (SID:%lx:%lx ), inet: %p, skb->len: %d\n", __FUNCTION__, 
++				iph->saddr, iph->daddr, 
++				(unsigned long)inet->sid.s45_sid64[0], 
++				(unsigned long)inet->sid.s45_sid64[1], 
++				inet, skb->len);
 +#endif
 +
 +
@@ -245,26 +317,28 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
 +		ip45h = ip45_hdr(skb);
 +		iph = (struct iphdr *)ip45h;
 +
-+		memset(&ip45h->nexthdr, 0, sizeof(struct ip45hdr) - sizeof(struct iphdr));
++		/* clear extended part of the header */
++		memset((char *)ip45h + sizeof(struct iphdr), 0, 
++			sizeof(struct ip45hdr) - sizeof(struct iphdr));
 +
 +		/* set addiotional items of IP45 */
 +		ip45h->nexthdr = iph->protocol;
-+		ip45h->protocol = IPPROTO_IP45;
++		ip45h->protocol = IPPROTO_UDP;
++		ip45h->ip45sp = htons(IP45_COMPAT_UDP_PORT);
++		ip45h->ip45dp = htons(inet->ip45dp);
++		ip45h->ip45le = htons(skb->len - sizeof(struct iphdr)); 
 +
-+		memcpy(&ip45h->d45addr, &inet->d45addr, sizeof(struct in45_addr));
-+		memcpy(&ip45h->s45addr.s45_addr32[3], &ip45h->saddr, sizeof(struct in_addr));
-+		/* get adress length - 4 */
-+		/* 147.229.3.45.10.11.12 : 3 */
-+		/* 147.229.3.45.10.11 : 2 */
-+		/* 147.229.3.45.12 : 1 */
-+		ip45h->dmark = 12 - (ip45_addr_begin(&ip45h->d45addr) - (void *)&ip45h->d45addr); 
++		ip45h->d45mark = inet->d45mark;
++		memcpy((char *)&ip45h->d45stck, (char *)&inet->d45stck, sizeof(struct in45_stck));
++
 +		/* generate session ID */
-+		if (inet->sid == 0) {
-+			u_int64_t sid; 
-+			get_random_bytes(&sid, sizeof(sid));
-+			inet->sid = sid;
++		if ( inet->sid.s45_sid64[0] == 0 && inet->sid.s45_sid64[1] == 0 ) {
++			get_random_bytes(&inet->sid, sizeof(struct in45_sid));
 +#ifdef CONFIG_IP45_DEBUG
-+			printk(KERN_INFO "IP45: %s new sid created, SID: %lx)\n", __FUNCTION__, (unsigned long)sid);
++			printk(KERN_INFO "IP45: %s new sid created, SID: %lx:%lx)\n", __FUNCTION__, 
++						inet->sid.s45_sid64[0],
++						inet->sid.s45_sid64[1]
++						);
 +#endif
 +		}
 +		ip45h->sid = inet->sid;
@@ -273,7 +347,7 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  	err = __ip_local_out(skb);
  	if (likely(err == 1))
  		err = dst_output(skb);
-@@ -178,6 +259,7 @@ int ip_build_and_send_pkt(struct sk_buff
+@@ -178,6 +264,7 @@ int ip_build_and_send_pkt(struct sk_buff
  	skb->priority = sk->sk_priority;
  	skb->mark = sk->sk_mark;
  
@@ -283,7 +357,7 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  }
 diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net/ipv4/Kconfig linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/Kconfig
 --- linux-2.6.32-131.17.1.el6.orig/net/ipv4/Kconfig	2011-09-29 15:29:28.000000000 +0200
-+++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/Kconfig	2012-11-10 16:59:57.305363737 +0100
++++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/Kconfig	2012-11-10 16:59:57.000000000 +0100
 @@ -324,6 +324,26 @@ config SYN_COOKIES
  
  	  If unsure, say N.
@@ -311,9 +385,27 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  config INET_AH
  	tristate "IP: AH transformation"
  	select XFRM
+diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net/ipv4/Makefile linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/Makefile
+--- linux-2.6.32-131.17.1.el6.orig/net/ipv4/Makefile	2009-12-03 04:51:21.000000000 +0100
++++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/Makefile	2013-01-30 15:29:53.000000000 +0100
+@@ -13,6 +13,8 @@ obj-y     := route.o inetpeer.o protocol
+ 	     fib_frontend.o fib_semantics.o \
+ 	     inet_fragment.o
+ 
++#obj-$(CONFIG_IP45) += cdp.o
++
+ obj-$(CONFIG_SYSCTL) += sysctl_net_ipv4.o
+ obj-$(CONFIG_IP_FIB_HASH) += fib_hash.o
+ obj-$(CONFIG_IP_FIB_TRIE) += fib_trie.o
+@@ -52,3 +54,5 @@ obj-$(CONFIG_NETLABEL) += cipso_ipv4.o
+ 
+ obj-$(CONFIG_XFRM) += xfrm4_policy.o xfrm4_state.o xfrm4_input.o \
+ 		      xfrm4_output.o
++
++
 diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net/ipv4/raw.c linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/raw.c
 --- linux-2.6.32-131.17.1.el6.orig/net/ipv4/raw.c	2011-09-29 15:29:17.000000000 +0200
-+++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/raw.c	2012-11-10 13:09:22.656357090 +0100
++++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/raw.c	2013-06-18 16:56:23.840581267 +0200
 @@ -64,6 +64,9 @@
  #include <linux/ip.h>
  #include <linux/net.h>
@@ -329,25 +421,36 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  	__be32 daddr;
  	__be32 saddr;
 +#ifdef CONFIG_IP45
-+	struct in45_addr d45addr;
++//	struct in45_addr d45addr;
 +#endif
  	u8  tos;
  	int err;
  
-@@ -501,6 +507,9 @@ static int raw_sendmsg(struct kiocb *ioc
+@@ -501,6 +507,11 @@ static int raw_sendmsg(struct kiocb *ioc
  		if (sk->sk_state != TCP_ESTABLISHED)
  			goto out;
  		daddr = inet->daddr;
 +#ifdef CONFIG_IP45
-+		memcpy(&d45addr, &inet->d45addr, sizeof(struct in45_addr));
++		/* XXX FIX IT */
++
++//		memcpy(&d45addr, &inet->d45addr, sizeof(struct in45_addr));
 +#endif
  	}
  
  	ipc.addr = inet->saddr;
+@@ -864,6 +875,8 @@ struct proto raw_prot = {
+ #endif
+ };
+ 
++EXPORT_SYMBOL(raw_prot);
++
+ #ifdef CONFIG_PROC_FS
+ static struct sock *raw_get_first(struct seq_file *seq)
+ {
 diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net/ipv4/tcp_ipv4.c linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/tcp_ipv4.c
 --- linux-2.6.32-131.17.1.el6.orig/net/ipv4/tcp_ipv4.c	2011-09-29 15:32:49.000000000 +0200
-+++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/tcp_ipv4.c	2012-11-10 21:17:16.792014978 +0100
-@@ -142,15 +142,25 @@ int tcp_twsk_unique(struct sock *sk, str
++++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/tcp_ipv4.c	2013-11-08 16:04:42.901755567 +0100
+@@ -142,11 +142,20 @@ int tcp_twsk_unique(struct sock *sk, str
  EXPORT_SYMBOL_GPL(tcp_twsk_unique);
  
  /* This will initiate an outgoing connection. */
@@ -362,26 +465,22 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  	struct sockaddr_in *usin = (struct sockaddr_in *)uaddr;
 +#ifdef CONFIG_IP45
 +	struct sockaddr_in45 *usin45 = (struct sockaddr_in45 *)uaddr;
++	struct in45_stck d45stck;
++	__u8 d45mark = 0;
 +#endif
  	struct rtable *rt;
  	__be32 daddr, nexthop;
  	int tmp;
- 	int err;
-+#ifdef CONFIG_IP45
-+	struct in45_addr d45addr;
-+#endif
- 
- 	if (addr_len < sizeof(struct sockaddr_in))
- 		return -EINVAL;
-@@ -158,7 +168,18 @@ int tcp_v4_connect(struct sock *sk, stru
+@@ -158,7 +167,19 @@ int tcp_v4_connect(struct sock *sk, stru
  	if (usin->sin_family != AF_INET)
  		return -EAFNOSUPPORT;
  
 +#ifdef CONFIG_IP45
 +	if (is_ip45) {
-+		memset(&d45addr, 0, sizeof(struct in45_addr));
-+		memcpy(&d45addr, &usin45->sin45_addr, sizeof(struct in45_addr));	
-+		memcpy(&daddr, ip45_addr_begin(&usin45->sin45_addr), sizeof(__be32));
++		/* get IP45 stack address, dmark an IPv4 address */	
++		printk("IP45 XXXXX AA1\n");
++		d45mark = in45_to_stck45((struct in_addr *)&daddr, &d45stck, &usin45->sin45_addr); 
++		printk("IP45 XXXXX AA2 dmark=%d, daddr=%x\n", d45mark, daddr );
 +	} else {
 +		daddr = usin->sin_addr.s_addr;
 +	}
@@ -392,16 +491,18 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  	if (inet->opt && inet->opt->srr) {
  		if (!daddr)
  			return -EINVAL;
-@@ -219,6 +240,16 @@ int tcp_v4_connect(struct sock *sk, stru
+@@ -219,6 +240,18 @@ int tcp_v4_connect(struct sock *sk, stru
  
  	tp->rx_opt.mss_clamp = 536;
  
 +#ifdef CONFIG_IP45
-+	inet->is_ip45 = is_ip45; 
++	inet->is_ip45 = is_ip45;
 +	if (is_ip45) {
-+		memcpy(&inet->d45addr, &d45addr, sizeof(struct in45_addr));
++		memcpy(&inet->d45stck, &d45stck, sizeof(struct in45_stck));
++		inet->d45mark = d45mark;
++		inet->ip45dp = IP45_COMPAT_UDP_PORT;
 +		/* create sid */
-+		get_random_bytes(&inet->sid, sizeof(inet->sid));
++		get_random_bytes(&inet->sid, sizeof(struct in45_sid));
 +		/* add IP45 extra header to exthdr len (size of MTU) */
 +		inet_csk(sk)->icsk_ext_hdr_len = sizeof(struct ip45hdr) - sizeof(struct iphdr);
 +	}
@@ -409,7 +510,7 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  	/* Socket identity is still unknown (sport may be zero).
  	 * However we set state to SYN-SENT and not releasing socket
  	 * lock select source port, enter ourselves into the hash tables and
-@@ -265,6 +296,14 @@ failure:
+@@ -265,6 +298,14 @@ failure:
  	return err;
  }
  
@@ -424,23 +525,23 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  /*
   * This routine does path mtu discovery as defined in RFC1191.
   */
-@@ -1390,6 +1429,10 @@ struct sock *tcp_v4_syn_recv_sock(struct
+@@ -1390,6 +1431,10 @@ struct sock *tcp_v4_syn_recv_sock(struct
  	inet_csk(newsk)->icsk_ext_hdr_len = 0;
  	if (newinet->opt)
  		inet_csk(newsk)->icsk_ext_hdr_len = newinet->opt->optlen;
 +#ifdef CONFIG_IP45
-+	if (is_ip45(skb)) 
++	if (is_ip45_skb(skb)) 
 +		inet_csk(newsk)->icsk_ext_hdr_len = sizeof(struct ip45hdr) - sizeof(struct iphdr);
 +#endif
  	newinet->id = newtp->write_seq ^ jiffies;
  
  	tcp_mtup_init(newsk);
-@@ -1470,6 +1513,13 @@ static __sum16 tcp_v4_checksum_init(stru
+@@ -1470,6 +1515,13 @@ static __sum16 tcp_v4_checksum_init(stru
  {
  	const struct iphdr *iph = ip_hdr(skb);
  
 +#ifdef CONFIG_IP45
-+	if (is_ip45(skb)) {
++	if (is_ip45_skb(skb)) {
 +		/* XXX - repair */
 +		skb->ip_summed = CHECKSUM_UNNECESSARY;
 +		return 0;
@@ -449,31 +550,53 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  	if (skb->ip_summed == CHECKSUM_COMPLETE) {
  		if (!tcp_v4_check(skb->len, iph->saddr,
  				  iph->daddr, skb->csum)) {
-@@ -1610,6 +1660,23 @@ int tcp_v4_rcv(struct sk_buff *skb)
+@@ -1610,6 +1662,29 @@ int tcp_v4_rcv(struct sk_buff *skb)
  	if (!sk)
  		goto no_tcp_socket;
  
 +#ifdef CONFIG_IP45
 +	/* IP 4.5 */
-+	if (is_ip45(skb) ) {
++	if (is_ip45_skb(skb) ) {
 +		struct ip45hdr *ip45h  = ip45_hdr(skb);
 +		struct inet_sock *inet = inet_sk(sk);
 +
 +#ifdef CONFIG_IP45_DEBUG
-+		printk(KERN_INFO "IP45: %s() #1 : nexthdr: %d, sk %p, *iph %p, inet: %p, sid %lX\n", __FUNCTION__, ip45h->protocol, 
-+						sk, (void *)iph, inet, (unsigned long)ip45h->sid );
++		printk(KERN_INFO "IP45: %s() #1 : nexthdr: %d, sk %p, *iph %p, inet: %p, sid %lX:%lX\n", __FUNCTION__, ip45h->protocol, 
++						sk, (void *)iph, inet, 
++						(unsigned long)ip45h->sid.s45_sid64[0],
++						(unsigned long)ip45h->sid.s45_sid64[1]);
 +#endif
 +
 +		inet->is_ip45 = 1;
 +		inet->sid = ip45h->sid;
-+		memcpy(&inet->s45addr, &ip45h->d45addr, sizeof(struct in45_addr));
-+		memcpy(&inet->d45addr, &ip45h->s45addr, sizeof(struct in45_addr));
++		memcpy(&inet->s45stck, &ip45h->d45stck, sizeof(struct in45_stck));
++		memcpy(&inet->d45stck, &ip45h->s45stck, sizeof(struct in45_stck));
++		inet->d45mark = ip45h->s45mark;
++		inet->ip45dp = ntohs(ip45h->ip45sp);
++		inet->saddr = ip45h->daddr;
++		inet->daddr = ip45h->saddr;
 +	}
 +#endif
  process:
  	if (sk->sk_state == TCP_TIME_WAIT)
  		goto do_time_wait;
-@@ -2491,6 +2558,9 @@ EXPORT_SYMBOL(tcp_hashinfo);
+@@ -1687,10 +1762,15 @@ do_time_wait:
+ 							&tcp_hashinfo,
+ 							iph->daddr, th->dest,
+ 							inet_iif(skb));
++
++		printk(KERN_INFO "IP45  %s() #1.0 : TCP_TW_SYN sk=%p, sk2=%p\n",
++			__FUNCTION__, sk, sk2);
++
+ 		if (sk2) {
+ 			inet_twsk_deschedule(inet_twsk(sk), &tcp_death_row);
+ 			inet_twsk_put(inet_twsk(sk));
+ 			sk = sk2;
++
+ 			goto process;
+ 		}
+ 		/* Fall through to ACK */
+@@ -2491,6 +2571,9 @@ EXPORT_SYMBOL(tcp_hashinfo);
  EXPORT_SYMBOL(tcp_prot);
  EXPORT_SYMBOL(tcp_v4_conn_request);
  EXPORT_SYMBOL(tcp_v4_connect);
@@ -485,7 +608,7 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  EXPORT_SYMBOL(tcp_v4_send_check);
 diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net/ipv4/udp.c linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/udp.c
 --- linux-2.6.32-131.17.1.el6.orig/net/ipv4/udp.c	2011-09-29 15:32:49.000000000 +0200
-+++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/udp.c	2012-11-10 13:37:54.727342921 +0100
++++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv4/udp.c	2013-01-31 17:28:47.000000000 +0100
 @@ -99,6 +99,9 @@
  #include <linux/skbuff.h>
  #include <linux/proc_fs.h>
@@ -496,44 +619,49 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  #include <net/net_namespace.h>
  #include <net/icmp.h>
  #include <net/route.h>
-@@ -611,6 +614,10 @@ int udp_sendmsg(struct kiocb *iocb, stru
+@@ -611,6 +614,11 @@ int udp_sendmsg(struct kiocb *iocb, stru
  	int corkreq = up->corkflag || msg->msg_flags&MSG_MORE;
  	int (*getfrag)(void *, char *, int, int, int, struct sk_buff *);
  	struct sk_buff *skb;
 +#ifdef CONFIG_IP45
-+	struct in45_addr d45addr;
++/*	struct in45_addr d45addr;
 +	int i;
++*/
 +#endif
  
  	if (len > 0xFFFF)
  		return -EMSGSIZE;
-@@ -665,6 +672,9 @@ int udp_sendmsg(struct kiocb *iocb, stru
+@@ -665,6 +673,11 @@ int udp_sendmsg(struct kiocb *iocb, stru
  			return -EDESTADDRREQ;
  		daddr = inet->daddr;
  		dport = inet->dport;
 +#ifdef CONFIG_IP45
++/*
 +		memcpy(&d45addr, &inet->d45addr, sizeof(struct in45_addr));
++*/
 +#endif
  		/* Open fast path for connected socket.
  		   Route will not be used, if at least one option is set.
  		 */
-@@ -672,6 +682,13 @@ int udp_sendmsg(struct kiocb *iocb, stru
+@@ -672,6 +685,15 @@ int udp_sendmsg(struct kiocb *iocb, stru
  	}
  	ipc.addr = inet->saddr;
  
 +#ifdef CONFIG_IP45
++/*
 +	memcpy(&inet->d45addr, &d45addr, sizeof(struct in45_addr));
 +	inet->is_ip45 = 0;
 +	for (i = 1 ; i < 4 ; i++)
 +		if (inet->d45addr[i] != 0x0)
 +			inet->is_ip45 = 1;
++*/
 +#endif
  	ipc.oif = sk->sk_bound_dev_if;
  	err = sock_tx_timestamp(msg, sk, &ipc.shtx);
  	if (err)
 diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net/ipv6/addrconf_core.c linux-2.6.32-131.17.1.el6.x86_64/net/ipv6/addrconf_core.c
 --- linux-2.6.32-131.17.1.el6.orig/net/ipv6/addrconf_core.c	2009-12-03 04:51:21.000000000 +0100
-+++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv6/addrconf_core.c	2012-11-10 21:18:55.802768851 +0100
++++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv6/addrconf_core.c	2012-11-10 21:18:55.000000000 +0100
 @@ -63,8 +63,13 @@ int __ipv6_addr_type(const struct in6_ad
  				return (IPV6_ADDR_LOOPBACK | IPV6_ADDR_UNICAST |
  					IPV6_ADDR_SCOPE_TYPE(IPV6_ADDR_SCOPE_LINKLOCAL));	/* addr-select 3.4 */
@@ -563,9 +691,70 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  	return (IPV6_ADDR_RESERVED |
  		IPV6_ADDR_SCOPE_TYPE(IPV6_ADDR_SCOPE_GLOBAL));	/* addr-select 3.4 */
  }
+diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net/ipv6/af_inet6.c linux-2.6.32-131.17.1.el6.x86_64/net/ipv6/af_inet6.c
+--- linux-2.6.32-131.17.1.el6.orig/net/ipv6/af_inet6.c	2011-09-29 15:31:34.000000000 +0200
++++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv6/af_inet6.c	2013-06-21 22:20:23.430452672 +0200
+@@ -442,6 +442,8 @@ int inet6_getname(struct socket *sock, s
+ 	sin->sin6_family = AF_INET6;
+ 	sin->sin6_flowinfo = 0;
+ 	sin->sin6_scope_id = 0;
++
++
+ 	if (peer) {
+ 		if (!inet->dport)
+ 			return -ENOTCONN;
+@@ -452,6 +454,15 @@ int inet6_getname(struct socket *sock, s
+ 		ipv6_addr_copy(&sin->sin6_addr, &np->daddr);
+ 		if (np->sndflow)
+ 			sin->sin6_flowinfo = np->flow_label;
++#ifdef CONFIG_IP45
++		if (inet->is_ip45) {
++			stck45_to_in45((void *)&sin->sin6_addr, (struct in_addr *)&inet->daddr, 
++				(struct in45_stck *)&inet->d45stck, inet->d45mark);
++//			memcpy(&sin->sin6_addr, &inet->d45addr, sizeof(struct in45_addr));
++		}
++#endif
++
++
+ 	} else {
+ 		if (ipv6_addr_any(&np->rcv_saddr))
+ 			ipv6_addr_copy(&sin->sin6_addr, &np->saddr);
+@@ -459,7 +470,9 @@ int inet6_getname(struct socket *sock, s
+ 			ipv6_addr_copy(&sin->sin6_addr, &np->rcv_saddr);
+ 
+ 		sin->sin6_port = inet->sport;
++
+ 	}
++
+ 	if (ipv6_addr_type(&sin->sin6_addr) & IPV6_ADDR_LINKLOCAL)
+ 		sin->sin6_scope_id = sk->sk_bound_dev_if;
+ 	*uaddr_len = sizeof(*sin);
+diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net/ipv6/inet6_hashtables.c linux-2.6.32-131.17.1.el6.x86_64/net/ipv6/inet6_hashtables.c
+--- linux-2.6.32-131.17.1.el6.orig/net/ipv6/inet6_hashtables.c	2009-12-03 04:51:21.000000000 +0100
++++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv6/inet6_hashtables.c	2013-03-26 18:48:10.000000000 +0100
+@@ -114,6 +114,8 @@ begintw:
+ 	sk = NULL;
+ out:
+ 	rcu_read_unlock();
++
++
+ 	return sk;
+ }
+ EXPORT_SYMBOL(__inet6_lookup_established);
+@@ -183,6 +185,10 @@ begin:
+ 		}
+ 	}
+ 	rcu_read_unlock();
++
++	printk(KERN_INFO "IP45  %s() #1.0 : sk: %p, hash: %x, hiscore: %x\n", 
++			__FUNCTION__, result, hash, hiscore);
++
+ 	return result;
+ }
+ 
 diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net/ipv6/tcp_ipv6.c linux-2.6.32-131.17.1.el6.x86_64/net/ipv6/tcp_ipv6.c
 --- linux-2.6.32-131.17.1.el6.orig/net/ipv6/tcp_ipv6.c	2011-09-29 15:32:49.000000000 +0200
-+++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv6/tcp_ipv6.c	2012-11-10 21:19:28.505131265 +0100
++++ linux-2.6.32-131.17.1.el6.x86_64/net/ipv6/tcp_ipv6.c	2013-03-31 16:46:59.117879599 +0200
 @@ -196,18 +196,43 @@ static int tcp_v6_connect(struct sock *s
  	 *	TCP over IPv4
  	 */
@@ -626,17 +815,32 @@ diff --exclude '*.mo' --exclude '*.cmd' -rupN linux-2.6.32-131.17.1.el6.orig/net
  
  		if (err) {
  			icsk->icsk_ext_hdr_len = exthdrlen;
+@@ -1742,6 +1775,10 @@ do_time_wait:
+ 		sk2 = inet6_lookup_listener(dev_net(skb->dev), &tcp_hashinfo,
+ 					    &ipv6_hdr(skb)->daddr,
+ 					    ntohs(th->dest), inet6_iif(skb));
++
++		printk(KERN_INFO "IP45  %s() #1.0 : TCP_TW_SYN sk=%p, sk2=%p\n",
++			__FUNCTION__, sk, sk2);
++
+ 		if (sk2 != NULL) {
+ 			struct inet_timewait_sock *tw = inet_twsk(sk);
+ 			inet_twsk_deschedule(tw, &tcp_death_row);
+Binary files linux-2.6.32-131.17.1.el6.orig/net/sctp/.protocol.c.swp and linux-2.6.32-131.17.1.el6.x86_64/net/sctp/.protocol.c.swp differ
 diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exclude auto.conf.cmd --exclude autoconf.h --exclude utsrelease.h --exclude bounds.h --exclude kernel.release --exclude include/linux/version.h -rupN linux-2.6.32-131.17.1.el6.orig/include/linux/in.h linux-2.6.32-131.17.1.el6.x86_64/include/linux/in.h
 --- linux-2.6.32-131.17.1.el6.orig/include/linux/in.h	2009-12-03 04:51:21.000000000 +0100
-+++ linux-2.6.32-131.17.1.el6.x86_64/include/linux/in.h	2012-11-10 21:20:47.950756073 +0100
-@@ -46,6 +46,10 @@ enum {
++++ linux-2.6.32-131.17.1.el6.x86_64/include/linux/in.h	2013-01-28 23:02:27.000000000 +0100
+@@ -46,6 +46,13 @@ enum {
    IPPROTO_COMP   = 108,                /* Compression Header protocol */
    IPPROTO_SCTP   = 132,		/* Stream Control Transport Protocol	*/
    IPPROTO_UDPLITE = 136,	/* UDP-Lite (RFC 3828)			*/
++/*
 +#ifdef CONFIG_IP45
-+  IPPROTO_IP45 = 155,	/* extended IP 4.5  - IP45			*/
++  IPPROTO_IP45 = 155,	
++  IPPROTO_CDP = 156,	
 +#define IPPROTO_IP45_DEFINED 1
 +#endif
++*/
  
    IPPROTO_RAW	 = 255,		/* Raw IP packets			*/
    IPPROTO_MAX
@@ -652,7 +856,7 @@ diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exc
 +#define RHEL_RELEASE_CODE 1537
 diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exclude auto.conf.cmd --exclude autoconf.h --exclude utsrelease.h --exclude bounds.h --exclude kernel.release --exclude include/linux/version.h -rupN linux-2.6.32-131.17.1.el6.orig/include/net/inet_hashtables.h linux-2.6.32-131.17.1.el6.x86_64/include/net/inet_hashtables.h
 --- linux-2.6.32-131.17.1.el6.orig/include/net/inet_hashtables.h	2011-09-29 15:31:33.000000000 +0200
-+++ linux-2.6.32-131.17.1.el6.x86_64/include/net/inet_hashtables.h	2012-11-10 13:58:16.902363588 +0100
++++ linux-2.6.32-131.17.1.el6.x86_64/include/net/inet_hashtables.h	2013-11-08 16:04:40.932723215 +0100
 @@ -28,6 +28,9 @@
  
  #include <net/inet_connection_sock.h>
@@ -663,13 +867,14 @@ diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exc
  #include <net/sock.h>
  #include <net/route.h>
  #include <net/tcp_states.h>
-@@ -304,11 +307,21 @@ typedef __u64 __bitwise __addrpair;
+@@ -304,11 +307,23 @@ typedef __u64 __bitwise __addrpair;
  	 ((*((__addrpair *)&(inet_sk(__sk)->daddr))) == (__cookie))	&&	\
  	 ((*((__portpair *)&(inet_sk(__sk)->dport))) == (__ports))	&&	\
  	 (!((__sk)->sk_bound_dev_if) || ((__sk)->sk_bound_dev_if == (__dif))))
 +#define INET45_MATCH(__sk, __net, __hash, __sid, __ports, __dif)\
 +	(((__sk)->sk_hash == (__hash)) && net_eq(sock_net(__sk), (__net)) &&	\
-+	 ((inet_sk(__sk)->sid) == (__sid))	&&	\
++	 ((inet_sk(__sk)->sid.s45_sid64[0]) == ((__sid)->s45_sid64[0]))	&&	\
++	 ((inet_sk(__sk)->sid.s45_sid64[1]) == ((__sid)->s45_sid64[1]))	&&	\
 +	 ((*((__portpair *)&(inet_sk(__sk)->dport))) == (__ports))	&&	\
 +	 (!((__sk)->sk_bound_dev_if) || ((__sk)->sk_bound_dev_if == (__dif))))
  #define INET_TW_MATCH(__sk, __net, __hash, __cookie, __saddr, __daddr, __ports, __dif)\
@@ -679,19 +884,21 @@ diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exc
  	 (!((__sk)->sk_bound_dev_if) || ((__sk)->sk_bound_dev_if == (__dif))))
 +#define INET45_TW_MATCH(__sk, __net, __hash, __sid, __ports, __dif)\
 +	(((__sk)->sk_hash == (__hash)) && net_eq(sock_net(__sk), (__net)) &&	\
-+	 ((inet_sk(__sk)->sid) == (__sid))	&&	\
++	 ((inet_sk(__sk)->sid.s45_sid64[0]) == ((__sid)->s45_sid64[0]))	&&	\
++	 ((inet_sk(__sk)->sid.s45_sid64[1]) == ((__sid)->s45_sid64[1]))	&&	\
 +	 ((*((__portpair *)&(inet_twsk(__sk)->tw_dport))) == (__ports)) &&	\
 +	 (!((__sk)->sk_bound_dev_if) || ((__sk)->sk_bound_dev_if == (__dif))))
  #else /* 32-bit arch */
  #define INET_ADDR_COOKIE(__name, __saddr, __daddr)
  #define INET_MATCH(__sk, __net, __hash, __cookie, __saddr, __daddr, __ports, __dif)	\
-@@ -317,12 +330,22 @@ typedef __u64 __bitwise __addrpair;
+@@ -317,12 +332,24 @@ typedef __u64 __bitwise __addrpair;
  	 (inet_sk(__sk)->rcv_saddr	== (__daddr))		&&	\
  	 ((*((__portpair *)&(inet_sk(__sk)->dport))) == (__ports))	&&	\
  	 (!((__sk)->sk_bound_dev_if) || ((__sk)->sk_bound_dev_if == (__dif))))
 +#define INET45_MATCH(__sk, __net, __hash, __sid, __ports, __dif)	\
 +	(((__sk)->sk_hash == (__hash)) && net_eq(sock_net(__sk), (__net))	&&	\
-+	 (inet_sk(__sk)->sid == (__sid))		&&	\
++	 (inet_sk(__sk)->sid.s45_sid64[0] == ((__sid)->s45_sid64[0]))		&&	\
++	 (inet_sk(__sk)->sid.s45_sid64[1] == ((__sid)->s45_sid64[1]))		&&	\
 +	 ((*((__portpair *)&(inet_sk(__sk)->dport))) == (__ports))	&&	\
 +	 (!((__sk)->sk_bound_dev_if) || ((__sk)->sk_bound_dev_if == (__dif))))
  #define INET_TW_MATCH(__sk, __net, __hash,__cookie, __saddr, __daddr, __ports, __dif)	\
@@ -702,40 +909,41 @@ diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exc
  	 (!((__sk)->sk_bound_dev_if) || ((__sk)->sk_bound_dev_if == (__dif))))
 +#define INET45_TW_MATCH(__sk, __net, __hash,__sid, __ports, __dif)	\
 +	(((__sk)->sk_hash == (__hash)) && net_eq(sock_net(__sk), (__net))	&&	\
-+	 (inet_sk(__sk)->sid == (__sid))		&&	\
++	 (inet_sk(__sk)->sid..s45_sid64[0] == ((__sid)->s45_sid64[0]))		&&	\
++	 (inet_sk(__sk)->sid..s45_sid64[1] == ((__sid)->s45_sid64[1]))		&&	\
 +	 ((*((__portpair *)&(inet_twsk(__sk)->tw_dport))) == (__ports)) &&	\
 +	 (!((__sk)->sk_bound_dev_if) || ((__sk)->sk_bound_dev_if == (__dif))))
  #endif /* 64-bit arch */
  
  /*
-@@ -336,6 +359,13 @@ extern struct sock * __inet_lookup_estab
+@@ -336,6 +363,13 @@ extern struct sock * __inet_lookup_estab
  		const __be32 saddr, const __be16 sport,
  		const __be32 daddr, const u16 hnum, const int dif);
  
 +#ifdef CONFIG_IP45
 +extern struct sock * __inet45_lookup_established(struct net *net,
 +		struct inet_hashinfo *hashinfo,
-+		const __be64 sid, const __be16 sport,
++		const struct in45_sid * psid, const __be16 sport,
 +		const u16 hnum, const int dif);
 +#endif
 +
  static inline struct sock *
  	inet_lookup_established(struct net *net, struct inet_hashinfo *hashinfo,
  				const __be32 saddr, const __be16 sport,
-@@ -359,6 +389,21 @@ static inline struct sock *__inet_lookup
+@@ -359,6 +393,21 @@ static inline struct sock *__inet_lookup
  	return sk ? : __inet_lookup_listener(net, hashinfo, daddr, hnum, dif);
  }
  
 +#ifdef CONFIG_IP45
 +static inline struct sock *__inet45_lookup(struct net *net,
 +					 struct inet_hashinfo *hashinfo,
-+					 const __be64 sid, const __be16 sport,
++					 const struct in45_sid * psid, const __be16 sport,
 +					 const __be32 daddr, const __be16 dport,
 +					 const int dif)
 +{
 +	u16 hnum = ntohs(dport);
 +	struct sock *sk = __inet45_lookup_established(net, hashinfo,
-+				sid, sport, hnum, dif);
++				psid, sport, hnum, dif);
 +
 +	return sk ? : __inet_lookup_listener(net, hashinfo, daddr, hnum, dif);
 +}
@@ -744,7 +952,7 @@ diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exc
  static inline struct sock *inet_lookup(struct net *net,
  				       struct inet_hashinfo *hashinfo,
  				       const __be32 saddr, const __be16 sport,
-@@ -380,14 +425,29 @@ static inline struct sock *__inet_lookup
+@@ -380,14 +429,29 @@ static inline struct sock *__inet_lookup
  					     const __be16 dport)
  {
  	struct sock *sk;
@@ -758,9 +966,9 @@ diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exc
  		return sk;
  	else
 +#ifdef CONFIG_IP45
-+		if (is_ip45(skb)) 
++		if (is_ip45_skb(skb)) 
 +			return __inet45_lookup(dev_net(skb_dst(skb)->dev), hashinfo,
-+				     	iph->sid, sport, 
++				     	&iph->sid, sport, 
 +				     	iph->daddr, dport, inet_iif(skb));
 +		else 
 +			return __inet_lookup(dev_net(skb_dst(skb)->dev), hashinfo,
@@ -776,20 +984,32 @@ diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exc
  extern int __inet_hash_connect(struct inet_timewait_death_row *death_row,
 diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exclude auto.conf.cmd --exclude autoconf.h --exclude utsrelease.h --exclude bounds.h --exclude kernel.release --exclude include/linux/version.h -rupN linux-2.6.32-131.17.1.el6.orig/include/net/inet_sock.h linux-2.6.32-131.17.1.el6.x86_64/include/net/inet_sock.h
 --- linux-2.6.32-131.17.1.el6.orig/include/net/inet_sock.h	2011-09-29 15:32:30.000000000 +0200
-+++ linux-2.6.32-131.17.1.el6.x86_64/include/net/inet_sock.h	2012-11-10 14:27:59.867357292 +0100
-@@ -115,6 +115,11 @@ struct inet_sock {
++++ linux-2.6.32-131.17.1.el6.x86_64/include/net/inet_sock.h	2013-11-08 14:55:08.244730646 +0100
+@@ -28,6 +28,8 @@
+ #include <net/request_sock.h>
+ #include <net/netns/hash.h>
+ 
++#include <net/ip45.h>
++
+ /** struct ip_options - IP Options
+  *
+  * @faddr - Saved first hop address
+@@ -115,6 +117,14 @@ struct inet_sock {
  #if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
  	struct ipv6_pinfo	*pinet6;
  #endif
 +#ifdef CONFIG_IP45
-+	__u32			s45addr[4];
-+	__u32			d45addr[4];
-+	__u64			sid;
++	__u32			s45stck[3];
++	__u32			d45stck[3];
++	__u8			d45mark;
++	__u16			ip45dp;
++//	__u64			sid[2];
++	struct in45_sid sid;
 +#endif
  	/* Socket demultiplex comparisons on incoming packets. */
  	__be32			daddr;
  	__be32			rcv_saddr;
-@@ -135,7 +140,12 @@ struct inet_sock {
+@@ -135,7 +145,12 @@ struct inet_sock {
  				hdrincl:1,
  				mc_loop:1,
  				transparent:1,
@@ -802,16 +1022,18 @@ diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exc
  	int			mc_index;
  	__be32			mc_addr;
  	struct ip_mc_socklist	*mc_list;
-@@ -207,6 +217,28 @@ static inline int inet_sk_ehashfn(const 
+@@ -207,6 +222,29 @@ static inline int inet_sk_ehashfn(const 
  	return inet_ehashfn(net, laddr, lport, faddr, fport);
  }
  
 +#ifdef CONFIG_IP45
 +static inline unsigned int inet45_ehashfn(struct net *net,
-+					const __be64 sid, const __u16 lport, const __be16 fport)
++					const struct in45_sid * psid, const __u16 lport, const __be16 fport)
 +{
-+	return jhash_3words((__force __u64) sid, 
-+			    (__force __u32) 0,
++	__be32 * tsid = (__be32 *)psid; /* hash only from first 32 + 32 bits */
++	
++	return jhash_3words((__force __u32) tsid[0], 
++			    (__force __u32) tsid[1],
 +			    ((__u32) lport) << 16 | (__force __u32)fport,
 +			    inet_ehash_secret + net_hash_mix(net));
 +}
@@ -819,12 +1041,11 @@ diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exc
 +static inline int inet45_sk_ehashfn(const struct sock *sk)
 +{
 +	const struct inet_sock *inet = inet_sk(sk);
-+	const __be64 sid = inet->sid;
 +	const __u16 lport = inet->num;
 +	const __be16 fport = inet->dport;
 +	struct net *net = sock_net(sk);
 +
-+	return inet45_ehashfn(net, sid, lport, fport);
++	return inet45_ehashfn(net, &inet->sid, lport, fport);
 +}
 +#endif
 +
@@ -833,81 +1054,150 @@ diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exc
  	struct request_sock *req = reqsk_alloc(ops);
 diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exclude auto.conf.cmd --exclude autoconf.h --exclude utsrelease.h --exclude bounds.h --exclude kernel.release --exclude include/linux/version.h -rupN linux-2.6.32-131.17.1.el6.orig/include/net/ip45.h linux-2.6.32-131.17.1.el6.x86_64/include/net/ip45.h
 --- linux-2.6.32-131.17.1.el6.orig/include/net/ip45.h	1970-01-01 01:00:00.000000000 +0100
-+++ linux-2.6.32-131.17.1.el6.x86_64/include/net/ip45.h	2012-11-05 17:28:06.309995143 +0100
-@@ -0,0 +1,105 @@
++++ linux-2.6.32-131.17.1.el6.x86_64/include/net/ip45.h	2013-11-05 15:03:04.501944952 +0100
+@@ -0,0 +1,242 @@
 +/*
 +*  IP45 - Extended IP protocol 
 +*  Tomas Podermanski, tpoder@cis.vutbr.cz 
 +*/
 +
 +#ifndef _NET_IP45_H
-+#define _NET_IP45_H "2012-11-05 01"
-+#endif
++#define _NET_IP45_H "2013-11-05 01"
 +
++#ifdef __linux 
 +#include <linux/types.h>
 +#include <asm/byteorder.h>
-+
-+#ifndef IPPROTO_IP45_DEFINED
-+enum {
-+  IPPROTO_IP45 = 155,   /* IP 4.5  - IP45          */
-+};
++//#include <netinet/in.h>
++//#include <net/inet_sock.h>
++//#include <endian.h>
++#ifdef __LITTLE_ENDIAN 
++#define __LITTLE_ENDIAN__
 +#endif
++#ifdef __BIG_ENDIAN 
++#define __BIG_ENDIAN__
++#endif
++#endif /* #ifdef linux */
++
++#ifdef WIN32
++typedef unsigned short sa_family_t;
++#endif
++
++
++#define IP45_COMPAT_UDP_PORT 4
 +
 +/* IP45 address structure */
 +struct in45_addr
 +{
 +    union
 +    {
-+        __u8        u45_addr8[16];
-+        __be16      u45_addr16[8];
-+        __be32      u45_addr32[4];
++        uint8_t       u45_addr8[16];
++        uint16_t      u45_addr16[8];
++        uint32_t      u45_addr32[4];
 +    } in45_u;
 +#define s45_addr         in45_u.u45_addr8
 +#define s45_addr16       in45_u.u45_addr16
 +#define s45_addr32       in45_u.u45_addr32
 +};
 +
++/* IP45 address structure */
++struct in45_stck
++{
++    union
++    {
++        uint8_t       u45_stck8[12];
++        uint16_t      u45_stck16[6];
++        uint32_t      u45_stck32[3];
++    } in45s_u;
++#define s45_stck         in45s_u.u45_stck8
++#define s45_stck16       in45s_u.u45_stck16
++#define s45_stck32       in45s_u.u45_stck32
++};
++
++/* IP45 SID - session ID */
++struct in45_sid
++{
++    union
++    {
++        uint8_t       u45_sid8[16];
++        uint16_t      u45_sid16[8];
++        uint32_t      u45_sid32[4];
++        uint64_t      u45_sid64[2];
++    } sid45_u;
++#define s45_sid         sid55_u.u45_sid8
++#define s45_sid16       sid45_u.u45_sid16
++#define s45_sid32       sid45_u.u45_sid32
++#define s45_sid64       sid45_u.u45_sid64
++};
++
 +/* IP45 header (standart IP header with no options + extra IP45 header */
 +struct ip45hdr {
-+#if defined(__LITTLE_ENDIAN_BITFIELD)
-+	__u8	sver:4,					/* sub version, always set to 5 */
++#if defined(__LITTLE_ENDIAN__)
++	uint8_t	sver:4,					/* sub version, always set to 5 */
 +			mver:4;					/* major version, always set to 4 */
-+#elif defined (__BIG_ENDIAN_BITFIELD)
-+	__u8	mver:4,
++#elif defined (__BIG_ENDIAN__)
++	uint8_t	mver:4,
 + 			sver:4;	
 +#else
-+#error	"Please fix <asm/byteorder.h>"
++#error	"Byte order not detected"
 +#endif
-+	__u8	tos;	
-+	__be16	tot_len;
-+	__be16	id;
-+	__be16	frag_off;
-+	__u8	ttl;
-+	__u8	protocol;	/* have to always be set to IPPROTO_IP45 */ 
-+	__sum16	check1;
-+	__be32	saddr;
-+	__be32	daddr;
++	uint8_t	tos;	
++	uint16_t	tot_len;
++	uint16_t	id;
++	uint16_t	frag_off;
++	uint8_t	ttl;
++	uint8_t	protocol;	/* have to always be set to IPPROTO_UDP */ 
++	uint16_t	check1;
++	uint32_t	saddr;
++	uint32_t	daddr;
++	/* compatibility header for UDP */
++	uint16_t  ip45sp;		// 45
++	uint16_t  ip45dp;		// 45
++	uint16_t  ip45le;		// XX
++	uint16_t  ip45ze;		// zeros 
 +	/* extended header for IP4.5 is presented here */
-+	__u8	nexthdr;
-+#if defined(__LITTLE_ENDIAN_BITFIELD)
-+	__u8	flags:4,
-+			dmark:4;
-+#elif defined (__BIG_ENDIAN_BITFIELD)
-+	__u8	dmark:4,
-+	  		flags:4;				
++	uint8_t	nexthdr;
++#if defined(__LITTLE_ENDIAN__)
++	uint8_t	d45mark:4,
++			s45mark:4;
++#elif defined (__BIG_ENDIAN__)
++	uint8_t	s45mark:4,
++	  		d45mark:4;				
 +#else
-+#error	"Please fix <asm/byteorder.h>"
++#error	"Byte order not detected"
 +#endif
-+	__sum16	check2;
-+	struct in45_addr	s45addr;
-+	struct in45_addr	d45addr;
-+	__be64	sid;  
++	uint16_t	check45;
++	struct in45_stck	s45stck;
++	struct in45_stck	d45stck;
++	struct in45_sid		sid;  
 +	/* no IP options allowed in IP4.5 */
 +};
 +
++#pragma pack(push, 1)
++
++/* IP45 without p1 and p2 part (IP, UDP) */
++struct ip45hdr_p3 {
++	uint8_t	nexthdr;
++#if defined(__LITTLE_ENDIAN__)
++	uint8_t	d45mark:4,
++			s45mark:4;
++#elif defined (__BIG_ENDIAN__)
++	uint8_t	s45mark:4,
++	  		d45mark:4;				
++#else
++#error	"Byte order not detected"
++#endif
++	uint16_t	check45;
++	struct in45_stck	s45stck;
++	struct in45_stck	d45stck;
++	struct in45_sid		sid;  
++	/* no IP options allowed in IP4.5 */
++};
++
++#pragma pack(pop)
++
 +struct sockaddr_in45 {
 +	sa_family_t			sin45_family;	/* Address family		*/
-+	__be16				sin45_port;		/* Port number			*/
++	uint16_t			sin45_port;		/* Port number			*/
 +	struct in45_addr	sin45_addr;
 +
 +};
@@ -915,14 +1205,78 @@ diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exc
 +/* return the pointer to the begin of the IP address (find first non 0 octet)*/
 +static inline void *ip45_addr_begin(const struct in45_addr *addr)
 +{
-+	__u8 *p;
++	uint8_t *p;
 +
-+	for (p = (__u8 *)addr; p - (__u8*)addr < sizeof(struct in45_addr) - sizeof(__be32); p++) {
-+		if ((__u8)*p != 0x0) break;
++	for (p = (uint8_t *)addr; p - (uint8_t*)addr < sizeof(struct in45_addr) - sizeof(uint32_t); p++) {
++		if ((uint8_t)*p != 0x0) break;
 +	}
 +	return p;
 +}
 +
++/* detect whether packet is valid IP45 packet */
++static inline int is_ip45_pkt(const struct ip45hdr *ip45h)
++{
++	return (ip45h->mver == 4 && \
++			ip45h->sver == 5 && \
++			ip45h->protocol == IPPROTO_UDP && \
++			( ip45h->ip45sp == htons(IP45_COMPAT_UDP_PORT) || 
++			ip45h->ip45dp == htons(IP45_COMPAT_UDP_PORT)) );
++}
++
++
++
++/* converts IPv4 and IP45stack address into single IP45 address */
++/* output :  in45 */
++/* input  :  stck45, in, mark */
++static inline void stck45_to_in45(
++	const struct in45_addr *in45, 
++	const struct in_addr *in, 
++	const struct in45_stck *stck45, 
++	const uint8_t mark) 
++{
++	/* clean ip45 addr */
++	memset((void *)in45, 0, sizeof(struct in45_addr));
++
++	/* IPv4 address part */
++	memcpy((void *)in45 + (sizeof(struct in45_addr) - mark - sizeof(struct in_addr)), 
++			(void *)in, sizeof(struct in_addr));
++
++	if (mark == 0) return;
++
++	/* stack part */
++	memcpy((void *)in45 + (sizeof(struct in45_addr) - mark), 
++			(void *)stck45 + (sizeof(struct in45_stck) - mark),
++			 mark);
++}
++
++/* converts IP45 address into  IP45stack address and single IPv4 address */
++/* output :  in, stck45, mark (return value)*/
++/* input:    in45 */
++static inline uint8_t in45_to_stck45(
++	const struct in_addr *in, 
++	const struct in45_stck *stck45, 
++	const struct in45_addr *in45) 
++{
++
++	/* get begin of the IP45 address */
++	void *bgn = ip45_addr_begin((void *)in45);
++
++	/* get mark */
++	uint8_t mark = 12 - (bgn - (void *)in45);
++
++	/* IPv4 address part */
++	memcpy((void *)in, bgn, sizeof(struct in_addr));
++
++	/* cleanup and set stack part */
++	memset((void *)stck45, 0, sizeof(struct in45_stck));
++
++	if (mark == 0) return 0;
++
++	memcpy((void *)stck45 + (sizeof(struct in45_stck) - mark), 
++			bgn + sizeof(struct in_addr),  mark);
++
++	return mark;
++}
 +
 +#ifdef __KERNEL__
 +#include <linux/skbuff.h>
@@ -932,17 +1286,231 @@ diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exc
 +	return (struct ip45hdr *)skb_network_header(skb);
 +}
 +
-+static inline int is_ip45(const struct sk_buff *skb)
++static inline int is_ip45_skb(const struct sk_buff *skb)
 +{
 +	return (ip45_hdr(skb)->mver == 4 && \
 +			ip45_hdr(skb)->sver == 5 && \
-+			ip45_hdr(skb)->protocol == IPPROTO_IP45);
++			ip45_hdr(skb)->protocol == IPPROTO_UDP && \
++			ip45_hdr(skb)->ip45dp == htons(IP45_COMPAT_UDP_PORT));
 +}
++
++#endif	/* __LERNEL__ */
++
++#endif	/* _NET_IP45_H */
++
+diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exclude auto.conf.cmd --exclude autoconf.h --exclude utsrelease.h --exclude bounds.h --exclude kernel.release --exclude include/linux/version.h -rupN linux-2.6.32-131.17.1.el6.orig/include/net/ip45.h.bkp linux-2.6.32-131.17.1.el6.x86_64/include/net/ip45.h.bkp
+--- linux-2.6.32-131.17.1.el6.orig/include/net/ip45.h.bkp	1970-01-01 01:00:00.000000000 +0100
++++ linux-2.6.32-131.17.1.el6.x86_64/include/net/ip45.h.bkp	2013-06-27 17:49:55.000000000 +0200
+@@ -0,0 +1,206 @@
++/*
++*  IP45 - Extended IP protocol 
++*  Tomas Podermanski, tpoder@cis.vutbr.cz 
++*/
++
++#ifndef _NET_IP45_H
++#define _NET_IP45_H "2013-06-27 03"
++
++#ifdef linux 
++#include <linux/types.h>
++#include <asm/byteorder.h>
++//#include <net/inet_sock.h>
++//#include <endian.h>
++#ifdef __LITTLE_ENDIAN
++#define __LITTLE_ENDIAN__
 +#endif
++#ifdef __BIG_ENDIAN
++#define __BIG_ENDIAN__
++#endif
++#endif
++
++
++#ifndef IPPROTO_IP45_DEFINED
++enum {
++  IPPROTO_IP45 = 155,	/* IP 4.5  - IP45          */
++  IPPROTO_CDP = 156,	/* IP 4.5  - Content Delivery Protocol */
++};
++#define IPPROTO_IP45_DEFINED 1
++#endif
++
++#define IP45_COMPAT_UDP_PORT 45
++
++/* IP45 address structure */
++struct in45_addr
++{
++    union
++    {
++        uint8_t       u45_addr8[16];
++        uint16_t      u45_addr16[8];
++        uint32_t      u45_addr32[4];
++    } in45_u;
++#define s45_addr         in45_u.u45_addr8
++#define s45_addr16       in45_u.u45_addr16
++#define s45_addr32       in45_u.u45_addr32
++};
++
++/* IP45 address structure */
++struct in45_stck
++{
++    union
++    {
++        uint8_t       u45_stck8[12];
++        uint16_t      u45_stck16[6];
++        uint32_t      u45_stck32[3];
++    } in45s_u;
++#define s45_stck         in45s_u.u45_stck8
++#define s45_stck16       in45s_u.u45_stck16
++#define s45_stck32       in45s_u.u45_stck32
++};
++
++/* IP45 header (standart IP header with no options + extra IP45 header */
++struct ip45hdr {
++#if defined(__LITTLE_ENDIAN__)
++	uint8_t	sver:4,					/* sub version, always set to 5 */
++			mver:4;					/* major version, always set to 4 */
++#elif defined (__BIG_ENDIAN__)
++	uint8_t	mver:4,
++ 			sver:4;	
++#else
++#error	"Byte order not detected"
++#endif
++	uint8_t	tos;	
++	uint16_t	tot_len;
++	uint16_t	id;
++	uint16_t	frag_off;
++	uint8_t	ttl;
++	uint8_t	protocol;	/* have to always be set to IPPROTO_UDP */ 
++	uint16_t	check1;
++	uint32_t	saddr;
++	uint32_t	daddr;
++	/* compatibility header for UDP */
++	uint16_t  ip45sp;		// 45
++	uint16_t  ip45dp;		// 45
++	uint16_t  ip45le;		// XX
++	uint16_t  ip45ze;		// zeros 
++	/* extended header for IP4.5 is presented here */
++	uint8_t	nexthdr;
++#if defined(__LITTLE_ENDIAN__)
++	uint8_t	d45mark:4,
++			s45mark:4;
++#elif defined (__BIG_ENDIAN__)
++	uint8_t	s45mark:4,
++	  		d45mark:4;				
++#else
++#error	"Byte order not detected"
++#endif
++	uint16_t	check45;
++	struct in45_stck	s45stck;
++	struct in45_stck	d45stck;
++	uint64_t	sid;  
++	/* no IP options allowed in IP4.5 */
++};
++
++struct sockaddr_in45 {
++	sa_family_t			sin45_family;	/* Address family		*/
++	uint16_t				sin45_port;		/* Port number			*/
++	struct in45_addr	sin45_addr;
++
++};
++
++/* return the pointer to the begin of the IP address (find first non 0 octet)*/
++static inline void *ip45_addr_begin(const struct in45_addr *addr)
++{
++	uint8_t *p;
++
++	for (p = (uint8_t *)addr; p - (uint8_t*)addr < sizeof(struct in45_addr) - sizeof(uint32_t); p++) {
++		if ((uint8_t)*p != 0x0) break;
++	}
++	return p;
++}
++
++/* detect whether packet is valid IP45 packet */
++static inline int is_ip45_pkt(const struct ip45hdr *ip45h)
++{
++	return (ip45h->mver == 4 && \
++			ip45h->sver == 5 && \
++			ip45h->protocol == IPPROTO_UDP && \
++			( ip45h->ip45dp == htons(IP45_COMPAT_UDP_PORT) || 
++			ip45h->ip45dp == htons(IP45_COMPAT_UDP_PORT)) );
++}
++
++
++
++/* converts IPv4 and IP45stack address into single IP45 address */
++/* output :  in45 */
++/* input  :  stck45, in, mark */
++static inline void stck45_to_in45(
++	const struct in45_addr *in45, 
++	const struct in_addr *in, 
++	const struct in45_stck *stck45, 
++	const uint8_t mark) 
++{
++	/* clean ip45 addr */
++	memset((void *)in45, 0, sizeof(struct in45_addr));
++
++	/* IPv4 address part */
++	memcpy((void *)in45 + (sizeof(struct in45_addr) - mark - sizeof(struct in_addr)), 
++			(void *)in, sizeof(struct in_addr));
++
++	if (mark == 0) return;
++
++	/* stack part */
++	memcpy((void *)in45 + (sizeof(struct in45_addr) - mark), 
++			(void *)stck45 + (sizeof(struct in45_stck) - mark),
++			 mark);
++}
++
++/* converts IP45 address into  IP45stack address and single IPv4 address */
++/* output :  in, stck45, mark (return value)*/
++/* input:    in45 */
++static inline uint8_t in45_to_stck45(
++	const struct in_addr *in, 
++	const struct in45_stck *stck45, 
++	const struct in45_addr *in45) 
++{
++
++	/* get begin of the IP45 address */
++	void *bgn = ip45_addr_begin((void *)in45);
++
++	/* get mark */
++	uint8_t mark = 12 - (bgn - (void *)in45);
++
++	/* IPv4 address part */
++	memcpy((void *)in, bgn, sizeof(struct in_addr));
++
++	/* cleanup and set stack part */
++	memset((void *)stck45, 0, sizeof(struct in45_stck));
++
++	if (mark == 0) return 0;
++
++	memcpy((void *)stck45 + (sizeof(struct in45_stck) - mark), 
++			bgn + sizeof(struct in_addr),  mark);
++
++	return mark;
++}
++
++#ifdef __KERNEL__
++#include <linux/skbuff.h>
++
++static inline struct ip45hdr *ip45_hdr(const struct sk_buff *skb)
++{
++	return (struct ip45hdr *)skb_network_header(skb);
++}
++
++static inline int is_ip45_skb(const struct sk_buff *skb)
++{
++	return (ip45_hdr(skb)->mver == 4 && \
++			ip45_hdr(skb)->sver == 5 && \
++			ip45_hdr(skb)->protocol == IPPROTO_UDP && \
++			ip45_hdr(skb)->ip45dp == htons(IP45_COMPAT_UDP_PORT));
++}
++
++#endif	/* __LERNEL__ */
++
++#endif	/* _NET_IP45_H */
 +
 diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exclude auto.conf.cmd --exclude autoconf.h --exclude utsrelease.h --exclude bounds.h --exclude kernel.release --exclude include/linux/version.h -rupN linux-2.6.32-131.17.1.el6.orig/include/net/ipv6.h linux-2.6.32-131.17.1.el6.x86_64/include/net/ipv6.h
 --- linux-2.6.32-131.17.1.el6.orig/include/net/ipv6.h	2011-09-29 15:29:33.000000000 +0200
-+++ linux-2.6.32-131.17.1.el6.x86_64/include/net/ipv6.h	2012-11-10 14:02:44.765495773 +0100
++++ linux-2.6.32-131.17.1.el6.x86_64/include/net/ipv6.h	2012-11-10 14:02:44.000000000 +0100
 @@ -74,6 +74,7 @@
  
  #define IPV6_ADDR_MAPPED	0x1000U
@@ -953,7 +1521,7 @@ diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exc
   *	Addr scopes
 diff --exclude 'include/asm/*' --exclude asm-offsets.h --exclude auto.conf --exclude auto.conf.cmd --exclude autoconf.h --exclude utsrelease.h --exclude bounds.h --exclude kernel.release --exclude include/linux/version.h -rupN linux-2.6.32-131.17.1.el6.orig/include/net/tcp.h linux-2.6.32-131.17.1.el6.x86_64/include/net/tcp.h
 --- linux-2.6.32-131.17.1.el6.orig/include/net/tcp.h	2011-09-29 15:32:30.000000000 +0200
-+++ linux-2.6.32-131.17.1.el6.x86_64/include/net/tcp.h	2012-11-10 14:27:13.740720268 +0100
++++ linux-2.6.32-131.17.1.el6.x86_64/include/net/tcp.h	2012-11-10 14:27:13.000000000 +0100
 @@ -440,6 +440,12 @@ extern struct sock *		tcp_v4_syn_recv_so
  extern int			tcp_v4_do_rcv(struct sock *sk,
  					      struct sk_buff *skb);

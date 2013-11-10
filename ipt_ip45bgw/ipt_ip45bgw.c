@@ -71,10 +71,14 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 		return NF_DROP;
 	}
 
-	/* check values in header */
+	/* check values in header - if the packet is not valit IP45 packet skipp bgw operations */
 	if (!is_ip45_pkt(ip45h)) {
-		printk(KERN_ERR "IP45: invalid IP45 packet\n");
-		return NF_DROP;
+		if ( log ) {
+			printk(KERN_INFO "NOT VALID IP45 PACKET " NIPFMT ":%d -> " NIPFMT ":%d ",
+					NIPQUAD(ip45h->saddr), ntohs(ip45h->ip45sp),
+					NIPQUAD(ip45h->daddr), ntohs(ip45h->ip45dp));
+		}
+		return XT_CONTINUE;
 	}
 
 

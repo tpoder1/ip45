@@ -1,5 +1,5 @@
 
-version = `cat ../ID | grep Revision | cut -d" " -f2`
+version = $(shell cat ../ID | grep Revision | cut -d" " -f2)
 distdir = ip45d-$(version)
 
 main:

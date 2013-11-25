@@ -40,7 +40,7 @@ clean:
 
 dist:  
 	mkdir $(distdir)
-	cp Makefile *.c *.h *.txt *.conf $(distdir)
+	cp Makefile *.c *.h *.txt *.conf makefile.* $(distdir)
 	cp -f ../common/ip45.h $(distdir)
 	find $(distdir) -name .svn -delete
 	tar czf $(distdir).tar.gz $(distdir)

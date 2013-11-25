@@ -1,5 +1,6 @@
 
-distdir = ip45d-0.1
+version = `cat ../ID | grep Revision | cut -d" " -f2`
+distdir = ip45d-$(version)
 
 main:
 	gcc -I../common -O3 -Wall -o ip45d ip45d.c inet_ntop45.c session_table.c

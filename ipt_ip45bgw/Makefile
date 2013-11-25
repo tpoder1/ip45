@@ -14,6 +14,9 @@ KVERSION := $(shell uname -r)
 PLATFORM := $(shell uname -m)
 KPATH := /lib/modules/$(KVERSION)/build
 
+version := $(shell cat ../ID | grep Revision | cut -d" " -f2)
+distdir := ipt_ip45bgw-$(version)
+
 #ARCH := mips
 #CROSS_COMPILE=mips-openwrt
 #KPATH := /root/rpmbuild/linux-3.5.7
@@ -34,6 +37,15 @@ clean:
 	rm -f *.so
 	rm -f *.cmd
 	rm -f *~
+
+dist:  
+	mkdir $(distdir)
+	cp Makefile *.c *.h *.txt *.conf $(distdir)
+	cp -f ../common/ip45.h $(distdir)
+	find $(distdir) -name .svn -delete
+	tar czf $(distdir).tar.gz $(distdir)
+	rm -rf $(distdir)
+
 
 install:
 	install ipt_ip45bgw.ko /lib/modules/$(KVERSION)/extra

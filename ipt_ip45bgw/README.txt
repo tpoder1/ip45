@@ -26,7 +26,7 @@ https://wiki.kubuntu.org/Kernel/Dev/DKMSPackaging
 
 NOTE FOR COOPERATION WITH SNAT
 ====================================================
-When the ipt_ip45bgw is run tigether with NAT the packets begonging 
+When the ipt_ip45bgw is run together with NAT the packets begonging 
 to IP45 do not have to pass to the NAT table. It could be done 
 by specyfing extra NAT rule with the ACCEPT condition to 
 bypass IP45 packets from processing in the NAT table.

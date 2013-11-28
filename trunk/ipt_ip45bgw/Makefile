@@ -15,7 +15,7 @@ PLATFORM := $(shell uname -m)
 KPATH := /lib/modules/$(KVERSION)/build
 
 version := $(shell cat ../ID | grep Revision | cut -d" " -f2)
-distdir := ipt_ip45bgw-$(version)
+distdir := ipt_ip45bgw-0.$(version)
 
 #ARCH := mips
 #CROSS_COMPILE=mips-openwrt

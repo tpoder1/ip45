@@ -23,7 +23,7 @@ cd ~/ip45
 echo "Building ip45d distribution package..."
 cd ip45d
 make dist 
-mv *.tar.gz ~/packages/source
+mv *.tar.gz ~/packages/source/ip45d
 
 cd ~/ip45
 
@@ -31,7 +31,7 @@ cd ~/ip45
 echo "Building ipt_ip45bgw packages...."
 cd ipt_ip45bgw
 make dist 
-mv *.tar.gz ~/packages/source
+mv *.tar.gz ~/packages/source/ipt_ip45bgw
 
 cd ~/ip45
 

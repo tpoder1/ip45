@@ -13,8 +13,8 @@ PKG_VERSION:=0.118
 PKG_RELEASE:=3
 
 PKG_SOURCE:=ipt_$(PKG_NAME)-$(PKG_VERSION).tar.gz
-PKG_SOURCE_URL:=http://www.ip45.org/packages/source/
-PKG_BUILD_DIR:=$(BUILD_DIR)/ipt_$(PKG_NAME)-$(PKG_VERSION).$(PKG_RELEASE)
+PKG_SOURCE_URL:=http://www.ip45.org/packages/source/ipt_ip45bgw
+PKG_BUILD_DIR:=$(BUILD_DIR)/ipt_$(PKG_NAME)-$(PKG_VERSION)
 
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/kernel-defaults.mk

@@ -10,11 +10,11 @@ include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=ip45bgw
 PKG_VERSION:=0
-PKG_RELEASE:=117
+PKG_RELEASE:=118
 
-PKG_SOURCE:=ipt_$(PKG_NAME)-$(PKG_RELEASE).tar.gz
+PKG_SOURCE:=ipt_$(PKG_NAME)-$(PKG_VERSION).$(PKG_RELEASE).tar.gz
 PKG_SOURCE_URL:=http://www.ip45.org/packages/source/
-PKG_BUILD_DIR:=$(BUILD_DIR)/ipt_$(PKG_NAME)-$(PKG_RELEASE)
+PKG_BUILD_DIR:=$(BUILD_DIR)/ipt_$(PKG_NAME)-$(PKG_VERSION).$(PKG_RELEASE)
 
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/kernel-defaults.mk

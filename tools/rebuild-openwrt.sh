@@ -30,10 +30,10 @@ function build_arch {
 	echo "CONFIG_TARGET_${target}_${subtarget}=y" >> .config
 	echo "CONFIG_PACKAGE_iptables=m" >> .config
 	echo "CONFIG_PACKAGE_ip45bgw=m" >> .config
-	make defconfig
+	make defconfig > /dev/null 
 
 	make prepare || exit 1
-	make package/ip45bgw/compile || exit 1
+	make package/ip45bgw/compile V=s || exit 1
 
 	mkdir -p ${DSTDIR}/${target}/${subtarget}
 	cp bin/${target}/packages/ip45* ${DSTDIR}/${target}/${subtarget}

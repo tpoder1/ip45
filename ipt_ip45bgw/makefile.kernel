@@ -4,9 +4,9 @@
 
 obj-m += ipt_ip45bgw.o
 
-all: ipt_ip45bgw.ko
-ipt_ip45bgw.ko: ipt_ip45bgw.o
-	$(LD) -o ipt_ip45bgw.ko ipt_ip45bgw.o ipt_ip45bgw.mod.o
-ipt_ip45bgw.o: ipt_ip45bgw.c
-	$(CC) -c -o ipt_ip45bgw.o ipt_ip45bgw.c
+#all: ipt_ip45bgw.ko
+#ipt_ip45bgw.ko: ipt_ip45bgw.o
+#	$(LD) -o ipt_ip45bgw.ko ipt_ip45bgw.o ipt_ip45bgw.mod.o
+#ipt_ip45bgw.o: ipt_ip45bgw.c
+#	$(CC) -c -o ipt_ip45bgw.o ipt_ip45bgw.c
 

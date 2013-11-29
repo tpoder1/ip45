@@ -8,26 +8,23 @@
 # 4. Build ip45bgw module 
 # 5. Repeat 2,3,4 for each architecture 
 
-VERSION="12.09"
-NAME="attitude_adjustment"
-#TARGETS="adm5120 adm8668 ar7 ar7xx at91 atheros au1000 brcm2708 brcm47xx 
-#          brcm63xx cns3xxx cobalt ep93xx ixp4xx kirkwood lantiq malta mcs814x              
-#		  mpc52xx mpc83xx omap4 orion ppc40x ramips x86 xburst"
-TARGETS="" # detected automatically 
 
 HOMEDIR=$(cd ~ && pwd)
-DSTDIR="${HOMEDIR}/packages/openwrt/${NAME}/${VERSION}/"
+DSTDIR="${HOMEDIR}/packages/openwrt/"
 
-function build_arch {
-	target=$1
-	subtarget=$2
+function build_target {
+	pkgdir=$1
+	target=$2
+	subtarget=$3
 
 	date
- 	echo "Building for ${target}_${subtarget}..."	
+ 	echo "Building for ${target}..."	
 
-	rm .config 
+	echo "" > .config
 	echo "CONFIG_TARGET_${target}=y" >> .config
-	echo "CONFIG_TARGET_${target}_${subtarget}=y" >> .config
+	if [ "$subtarget" != "" ]; then
+		echo "CONFIG_TARGET_${target}_${subtarget}=y" >> .config
+	fi
 	echo "CONFIG_PACKAGE_iptables=m" >> .config
 	echo "CONFIG_PACKAGE_ip45bgw=m" >> .config
 	make defconfig > /dev/null 
@@ -35,39 +32,64 @@ function build_arch {
 	make prepare || exit 1
 	make package/ip45bgw/compile V=s || exit 1
 
-	mkdir -p ${DSTDIR}/${target}/${subtarget}
-	cp bin/${target}/packages/ip45* ${DSTDIR}/${target}/${subtarget}
+	if [ -f bin/${target}/packages/ip45* ] 
+	then 
+		mkdir -p ${pkgdir}
+		cp bin/${target}/packages/ip45* ${pkgdir}
+	else 
+		echo "The package was not built"
+	fi 
 
- 	echo "Building for ${target} done."	
+ 	echo "Building for ${target}_${subtarget} done."	
 	date
 }
 
+function build_release {
+	NAME=$1
+	VERSION=$2
+	GITREPO=$3
+	SUBTARGETS=$4  # build all subtargets ? 
 
-cd ~/openwrt/ || exit 1
-git clone git://git.openwrt.org/${VERSION}/openwrt.git ${VERSION}
+	echo "****************************"
+	echo "* $1 $2 $3 "
+	echo "****************************"
 
-cd ${VERSION} || exit 1
-mkdir -p package/ip45bgw/
-cp -Rv ~/ip45/openwrt/ip45bgw/Makefile package/ip45bgw/
+	cd ~/openwrt/ || exit 1
+	git clone ${GITREPO} ${VERSION}
 
-TARGETS=$(ls -1 target/linux | grep -v Makefile | grep -v generic )
+	cd ${VERSION} || exit 1
+	mkdir -p package/ip45bgw/
+	cp -Rv ~/ip45/openwrt/ip45bgw/Makefile package/ip45bgw/
 
-mkdir -p logs
-rm -f logs/*
-rm -rf bin/* 
+	mkdir -p logs
+	rm -f logs/*
+	rm -rf bin/* 
 
-for target in ${TARGETS}; do 
+	TARGETS=$(ls -1 target/linux | grep -v Makefile | grep -v generic )
 
-	subtargets=$(cat target/linux/${target}/Makefile | grep SUBTARGETS | cut -f2 -d=)
-	if [ -z "${subtargets}" ]; then 
-		subtargets="generic"
-	fi 
+	for target in ${TARGETS}; do 
 
-	for subtarget in $subtargets; do 
-		echo  ${target} ${subtarget}  
-		build_arch ${target} ${subtarget}  2>&1 | tee logs/${target}_${subtarget}
-	done 
+			if [ "${SUBTARGETS}" == "no" ]; then 
+			# single target
+			echo  ${target}   
+			pkgdir="${DSTDIR}/${NAME}/${VERSION}/${target}"
+			build_target ${pkgdir} ${target} 2>&1 | tee logs/${target}
+		else 
+			# multiple targets 	
+			subtargets=$(cat target/linux/${target}/Makefile | grep SUBTARGETS | cut -f2 -d=)
+			if [ -z "${subtargets}" ]; then 
+				subtargets="generic"
+			fi 
 
-done
+			for subtarget in $subtargets; do 
+				echo  ${target} ${subtarget}  
+				pkgdir="${DSTDIR}/${NAME}/${VERSION}/${target}/${subtarget}"
+				build_target ${pkgdir} ${target} ${subtarget} 2>&1 | tee logs/${target}_${subtarget}
+			done 
+		fi
+	done
+}
 
+build_release "attitude_adjustment" "12.09" "git://git.openwrt.org/12.09/openwrt.git" "yes"
+build_release "barrier_breaker" "trunk" "git://git.openwrt.org/openwrt.git" "no"
 

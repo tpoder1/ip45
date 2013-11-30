@@ -1,0 +1,43 @@
+
+********************************************
+* ip45d                                    *
+********************************************
+ - better session management (cleaning up old sessions) 
+ - DHCPv6 support for tap driver 
+ - startup scripts for linux platform 
+ - package for OSX 
+ - package for FreeBSD
+ - WIN: Integration of service into one executable 
+ - WIN: Install package with tun/tap driver 
+
+
+********************************************
+* BGW (ipt_ip45bgw)                        *
+********************************************
+ - rename module to xt_ip45bgw 
+ - better address handling (incomming, outgoing) 
+ - integration into NAT module (eaisier configuration) 
+
+
+********************************************
+* openwrt                                  *
+********************************************
+ - dividing into separate packages (module, library, daemon) 
+ - openwrt package repository instead of single package
+ - inteferation with openwrt firewall 
+
+ 
+********************************************
+* protocol                                 *
+********************************************
+ - ICMP handling (consider ping45, traceroute45 ??)
+
+
+********************************************
+* doc                                      *
+********************************************
+ - description on the web (user friendly) 
+ - manual for openwrt 
+ - installation of ip45d on various paltforms 
+
+ 

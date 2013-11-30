@@ -28,7 +28,7 @@ cd ip45d
 make dist 
 mv *.tar.gz ~/packages/source/ip45d
 cd  ~/packages/source/ip45d/
-ln -s ip45d-${VERSION}.tar.gz ip45d-latest.tar.gz
+ln -fs ip45d-${VERSION}.tar.gz ip45d-latest.tar.gz
 
 cd ~/ip45
 
@@ -41,7 +41,7 @@ mkdir -p ~/packages/windows/${VERSION}/
 mv *.exe ~/packages/windows/${VERSION}/
 cd ~/packages/windows
 rm latest
-ln -s ${VERSION} latest
+ln -fs ${VERSION} latest
 
 cd ~/ip45
 
@@ -52,7 +52,7 @@ cd ipt_ip45bgw
 make dist 
 mv *.tar.gz ~/packages/source/ipt_ip45bgw
 cd  ~/packages/source/ipt_ip45bgw/
-ln -s ipt_ip45bgw-${VERSION}.tar.gz ipt_ip45bgw-latest.tar.gz
+ln -fs ipt_ip45bgw-${VERSION}.tar.gz ipt_ip45bgw-latest.tar.gz
 cd ~/ip45
 
 

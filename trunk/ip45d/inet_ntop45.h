@@ -4,7 +4,7 @@
 #include <windows.h>
 #include <winsock.h>
 #include <winsock2.h>
-#include <Ws2tcpip.h>
+#include <ws2tcpip.h>
 #else 
 #include <sys/socket.h>
 #endif

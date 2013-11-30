@@ -19,9 +19,9 @@
 
 #ifdef WIN32
 #include <windows.h>
-#include <WinBase.h>
+#include <winbase.h>
 #include <winsock2.h>
-#include <Ws2tcpip.h>
+#include <ws2tcpip.h>
 #include <winioctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>

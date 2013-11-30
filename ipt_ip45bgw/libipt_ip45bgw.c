@@ -46,7 +46,7 @@ static int ip45bgw_parse(
 			if (!optarg) {
 				xtables_error(PARAMETER_PROBLEM, "--" IPT_IP45_UPSTREAM ": You must specify a value");
 			}
-			if (xtables_check_inverse(optarg, &invert, NULL, 0 ,argv)) {
+			if (invert) {
 				xtables_error(PARAMETER_PROBLEM, "Unexpected `!' after --" IPT_IP45_UPSTREAM);
 			}
 
@@ -66,7 +66,7 @@ static int ip45bgw_parse(
 			if (!optarg) {
 				xtables_error(PARAMETER_PROBLEM, "--" IPT_IP45_DOWNSTREAM ": You must specify a value");
 			}
-			if (xtables_check_inverse(optarg, &invert, NULL, 0 ,argv)) {
+			if (invert) {
 				xtables_error(PARAMETER_PROBLEM, "Unexpected `!' after --" IPT_IP45_DOWNSTREAM);
 			}
 

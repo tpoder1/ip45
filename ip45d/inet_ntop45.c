@@ -8,10 +8,9 @@
 #include <sys/types.h>
 #ifdef WIN32
 #include <windows.h>
-#include <winsock.h>
 #include <winsock2.h>
 //#include <ws2def.h>
-#include <Ws2tcpip.h>
+#include <ws2tcpip.h>
 #else 
 #include <sys/socket.h>
 #include <netinet/in.h>

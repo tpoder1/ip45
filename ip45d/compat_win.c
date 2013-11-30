@@ -7,7 +7,7 @@
 
 #include <windows.h>
 #include <winsock2.h>
-#include <Ws2tcpip.h>
+#include <ws2tcpip.h>
 #include <winioctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>

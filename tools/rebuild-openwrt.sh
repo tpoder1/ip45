@@ -11,6 +11,7 @@
 
 HOMEDIR=$(cd ~ && pwd)
 DSTDIR="${HOMEDIR}/packages/openwrt/"
+INDEX="./staging_dir/host/bin/ipkg-make-index"
 
 function build_target {
 	pkgdir=$1
@@ -35,7 +36,9 @@ function build_target {
 	if [ -f bin/${target}/packages/ip45* ] 
 	then 
 		mkdir -p ${pkgdir}
-		cp bin/${target}/packages/ip45* ${pkgdir}
+		cp bin/${target}/packages/*ip45* ${pkgdir}
+		./staging_dir/host/bin/ipkg-make-index ${pkgdir} > "${pkgdir}/Packages"
+		gzip < "${pkgdir}/Packages" > "${pkgdir}/Packages.gz"
 	else 
 		echo "The package was not built"
 	fi 
@@ -72,7 +75,7 @@ function build_release {
 			if [ "${SUBTARGETS}" == "no" ]; then 
 			# single target
 			echo  ${target}   
-			pkgdir="${DSTDIR}/${NAME}/${VERSION}/${target}"
+			pkgdir="${DSTDIR}/${NAME}/${VERSION}/${target}/packages"
 			build_target ${pkgdir} ${target} 2>&1 | tee logs/${target}
 		else 
 			# multiple targets 	
@@ -83,7 +86,7 @@ function build_release {
 
 			for subtarget in $subtargets; do 
 				echo  ${target} ${subtarget}  
-				pkgdir="${DSTDIR}/${NAME}/${VERSION}/${target}/${subtarget}"
+				pkgdir="${DSTDIR}/${NAME}/${VERSION}/${target}/${subtarget}/packages"
 				build_target ${pkgdir} ${target} ${subtarget} 2>&1 | tee logs/${target}_${subtarget}
 			done 
 		fi

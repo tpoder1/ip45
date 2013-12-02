@@ -3,7 +3,7 @@
 * ip45d                                    *
 ********************************************
  - better session management (cleaning up old sessions) 
- - DHCPv6 support for tap driver 
+ - RA/DHCPv6 support for tap driver 
  - startup scripts for linux platform 
  - package for OSX 
  - package for FreeBSD
@@ -14,6 +14,7 @@
 ********************************************
 * BGW (ipt_ip45bgw)                        *
 ********************************************
+ - remove .final_check operation (problematic) 
  - rename module to xt_ip45bgw 
  - better address handling (incomming, outgoing) 
  - integration into NAT module (eaisier configuration) 

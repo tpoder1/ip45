@@ -19,6 +19,8 @@ if [ $? == 0 ] ; then
 	exit 0
 fi
 
+cp ID ID.last 
+
 cd ~/ip45
 
 
@@ -56,5 +58,7 @@ ln -fs ipt_ip45bgw-${VERSION}.tar.gz ipt_ip45bgw-latest.tar.gz
 cd ~/ip45
 
 
-cp ID ID.last 
+# rebuild openwrt packages 
+cd tools && ./rebuild-openwrt.sh
+
 

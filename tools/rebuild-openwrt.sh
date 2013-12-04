@@ -36,6 +36,8 @@ function build_target {
 	if [ -f bin/${target}/packages/ip45* ] 
 	then 
 		mkdir -p ${pkgdir}
+		mkdir -p ${pkgdir}/old
+		mv ${pkgdir}/*ip45* ${pkgdir}/old/
 		cp bin/${target}/packages/*ip45* ${pkgdir}
 		./staging_dir/host/bin/ipkg-make-index ${pkgdir} > "${pkgdir}/Packages"
 		gzip < "${pkgdir}/Packages" > "${pkgdir}/Packages.gz"
@@ -76,7 +78,7 @@ function build_release {
 			# single target
 			echo  ${target}   
 			pkgdir="${DSTDIR}/${NAME}/${VERSION}/${target}/packages"
-			build_target ${pkgdir} ${target} 2>&1 | tee logs/${target}
+			build_target ${pkgdir} ${target} > logs/${target} 2>&1
 		else 
 			# multiple targets 	
 			subtargets=$(cat target/linux/${target}/Makefile | grep SUBTARGETS | cut -f2 -d=)
@@ -87,7 +89,7 @@ function build_release {
 			for subtarget in $subtargets; do 
 				echo  ${target} ${subtarget}  
 				pkgdir="${DSTDIR}/${NAME}/${VERSION}/${target}/${subtarget}/packages"
-				build_target ${pkgdir} ${target} ${subtarget} 2>&1 | tee logs/${target}_${subtarget}
+				build_target ${pkgdir} ${target} ${subtarget} tee logs/${target}_${subtarget} 2>&1
 			done 
 		fi
 	done

@@ -508,6 +508,7 @@ int main_loop_posix(int verbose_opt) {
 	}
 	LOG("ip45 device: %s\n", tun_name);
 
+init_sock:
 	if ((sockfd = init_sock()) < 0) {
 		LOG("Cant initialize ip45 socket\n");
 		exit(2);
@@ -542,7 +543,8 @@ int main_loop_posix(int verbose_opt) {
 			if ( (len = recvfrom(sockfd, buf45, sizeof(buf45), 0, 
 					(void *)&peer45_addr, &addrlen)) <= 0 ) {
 				perror("recv: ");
-				continue;
+				close(sockfd);
+				goto init_sock;
 			}
 
 			len = ip45_to_ipv6(&peer45_addr, buf45, len, (char *)ip6h);

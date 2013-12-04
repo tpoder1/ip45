@@ -104,13 +104,13 @@ static int ip45bgw_parse(
 	return 0;
 }
 
-static int ip45bgw_check(unsigned int flags)
+static void ip45bgw_check(unsigned int flags)
 {
 	if ( (IPT_IP45_OPT_DOWNSTREAM & flags) == 0 || (IPT_IP45_OPT_UPSTREAM & flags) == 0 ) {
 		xtables_error(PARAMETER_PROBLEM, "You must specify both --" IPT_IP45_DOWNSTREAM " and --" IPT_IP45_UPSTREAM);
-		return -1;
+//		return -1;
 	}
-	return 0;
+//	return 0;
 }
 
 static void ip45bgw_save(

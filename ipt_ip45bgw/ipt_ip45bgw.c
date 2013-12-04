@@ -148,15 +148,27 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 	return XT_CONTINUE;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+static int ip45bgw_tg_check(const struct xt_tgchk_param *par) {
+#else 
 static bool ip45bgw_tg_check(const struct xt_tgchk_param *par) {
+#endif
 	const struct ipt_ip45bgw_info *info = par->targinfo;
 
 	if ( (IPT_IP45_OPT_DOWNSTREAM & info->ip45flags) == 0 || (IPT_IP45_OPT_UPSTREAM & info->ip45flags) == 0 ) {
 		printk("IP45: you must specify both --" IPT_IP45_DOWNSTREAM " and --" IPT_IP45_UPSTREAM "\n");
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+		return -EINVAL;
+#else 
 		return false;
+#endif
     }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+	return 0;
+#else 
 	return true;
+#endif
 }
 
 static struct xt_target ip45bgw_tg_reg __read_mostly = {

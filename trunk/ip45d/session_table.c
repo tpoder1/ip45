@@ -25,6 +25,11 @@
 #include <netinet/in.h>
 #endif
 
+#ifdef __APPLE__
+#include <netinet/in.h>
+#include <net/if.h>
+#endif
+
 #include "session_table.h"
 #include <ip45.h>
 

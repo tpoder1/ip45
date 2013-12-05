@@ -47,6 +47,7 @@
 #include <linux/if_tun.h>
 #define TUNDEV_NAME "/dev/net/tun"
 #define TUNIF_NAME "ip45"
+#define TUNIF_CMD "/sbin/ifconfig %s add %s/%d up"
 #endif 
 
 #ifdef __APPLE__
@@ -54,6 +55,7 @@
 #include "tun_ioctls.h"
 #define TUNDEV_NAME "/dev/tun4"
 #define TUNIF_NAME "tun4"
+#define TUNIF_CMD "/sbin/ifconfig %s inet6 %s/%d up"
 #endif 
 
 #ifdef WIN32 
@@ -75,6 +77,7 @@
 #define DEBUG(fmt, ...) printf(fmt, ##__VA_ARGS__);
 
 #define LOCAL_IPV6_ADDR "0:0:0:0:0:1:0:0"
+#define LOCAL_IPV6_MASKLEN 8
 
 
 unsigned char local_addr[16];
@@ -501,12 +504,27 @@ int main_loop_posix(int verbose_opt) {
 	struct sockaddr_in peer45_addr;
 	socklen_t addrlen = sizeof(struct sockaddr_in);
 	ssize_t len;
+	char cmdbuf[1024];
+	int ret;
 
 	if ( (tunfd = tun_alloc_posix(tun_name)) < 0 ) {
-		LOG("Cant initialize ip45 on interface\n");
+		LOG("ERROR Cant initialize ip45 on interface\n");
 		exit(2);
 	}
 	LOG("ip45 device: %s\n", tun_name);
+	
+	// config virtual interface
+	sprintf(cmdbuf, TUNIF_CMD, tun_name, LOCAL_IPV6_ADDR, LOCAL_IPV6_MASKLEN);
+	LOG("Configuring interface: %s ... ", cmdbuf);
+	ret = system(cmdbuf);
+	if (ret < 0) {
+		LOG("\nERROR Can't configure interface... exiting\n");
+		exit(2);
+	} else {
+		LOG("OK\n");
+	}
+	
+	
 
 init_sock:
 	if ((sockfd = init_sock()) < 0) {

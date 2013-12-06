@@ -30,8 +30,8 @@ function build_target {
 	echo "CONFIG_PACKAGE_ip45bgw=m" >> .config
 	make defconfig > /dev/null 
 
-	make prepare || exit 1
-	make package/ip45bgw/compile V=s || exit 1
+	make prepare || return
+	make package/ip45bgw/compile V=s || return
 
 	if [ -f bin/${target}/packages/ip45* ] 
 	then 

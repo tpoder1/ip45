@@ -59,11 +59,22 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_action_param
 #else
 static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param *par) {
 #endif
-	struct ip45hdr *ip45h = (struct ip45hdr *)ip_hdr(skb);
+	//struct ip45hdr *ip45h = (struct ip45hdr *)ip_hdr(skb);
+	struct iphdr _iph;
+	struct ip45hdr *ip45h;
 	const struct ipt_ip45bgw_info *info = (struct ipt_ip45bgw_info *)par->targinfo;
 //	u_int32_t downstream, upstream;
 	int shlen = (32 - info->downstream_len) / 8; /* number of octets to shift */
 	int log = IPT_IP45_OPT_LOG & info->ip45flags;
+
+	// this code doedn not work on openwrt an requires use of skb_header_pointer
+	//ip45h = (struct ip45hdr *)ip45_hdr(skb);
+	ip45h = skb_header_pointer(skb, 0, sizeof(_iph), &_iph);
+
+	if (ip45h == NULL) {
+		printk(KERN_INFO IPT_IP45_LOG_PREFIX "FATAL ERROR: Can't determine ip header\n");
+		return NF_DROP;
+	}
 
 	/* check values in header - if the packet is not valit IP45 packet skipp bgw operations */
 	if (!is_ip45_pkt(ip45h)) {
@@ -75,6 +86,7 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 		return XT_CONTINUE;
 	}
 
+
 	if (!skb_make_writable(skb, sizeof(struct ip45hdr))) {
 		pr_devel(IPT_IP45_LOG_PREFIX "unwriteable, dropped\n");
 		return NF_DROP;
@@ -84,6 +96,7 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 		ip45bgw_log("INPUT", ip45h);
 	}
 	
+
 //	memcpy(&downstream, &info->downstream, sizeof(downstream));
 //	memcpy(&upstream, &info->upstream, sizeof(upstream));
 	
@@ -155,6 +168,7 @@ static bool ip45bgw_tg_check(const struct xt_tgchk_param *par) {
 #endif
 	const struct ipt_ip45bgw_info *info = par->targinfo;
 
+	printk(KERN_INFO  "debug #1\n");
 	if ( (IPT_IP45_OPT_DOWNSTREAM & info->ip45flags) == 0 || (IPT_IP45_OPT_UPSTREAM & info->ip45flags) == 0 ) {
 		printk("IP45: you must specify both --" IPT_IP45_DOWNSTREAM " and --" IPT_IP45_UPSTREAM "\n");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
@@ -164,6 +178,7 @@ static bool ip45bgw_tg_check(const struct xt_tgchk_param *par) {
 #endif
     }
 
+	printk(KERN_INFO  "debug #2\n");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
 	return 0;
 #else 
@@ -175,12 +190,11 @@ static struct xt_target ip45bgw_tg_reg __read_mostly = {
 	.name 		= "ip45bgw",
 	.target 	= ip45bgw_tg,
 	.checkentry	= (void *)ip45bgw_tg_check,
-	.destroy	= NULL,
 	.family		= NFPROTO_IPV4,
 	.targetsize	= sizeof(struct ipt_ip45bgw_info),
-	//.table		= "mangle",
+	.table		= "mangle",
 //	.table		= "nat",
-	.hooks		= (1 << NF_INET_POST_ROUTING) | (1 << NF_INET_PRE_ROUTING) | (1 << NF_INET_FORWARD),
+	.hooks		= (1 << NF_INET_POST_ROUTING) | (1 << NF_INET_PRE_ROUTING) ,
 	.me 		= THIS_MODULE,
 };
 
@@ -193,6 +207,7 @@ static void __exit ip45bgw_tg_exit(void)
 {
 	xt_unregister_target(&ip45bgw_tg_reg);
 }
+
 
 module_init(ip45bgw_tg_init);
 module_exit(ip45bgw_tg_exit);

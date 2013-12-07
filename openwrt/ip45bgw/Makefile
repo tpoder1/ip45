@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=ip45bgw
-PKG_VERSION:=0.147
+PKG_VERSION:=0.149
 PKG_RELEASE:=1
 
 PKG_SOURCE:=ipt_$(PKG_NAME)-$(PKG_VERSION).tar.gz

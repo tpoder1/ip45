@@ -60,7 +60,7 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_action_param
 static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param *par) {
 #endif
 	//struct ip45hdr *ip45h = (struct ip45hdr *)ip_hdr(skb);
-	struct iphdr _iph;
+	struct ip45hdr _ip45h;
 	struct ip45hdr *ip45h;
 	const struct ipt_ip45bgw_info *info = (struct ipt_ip45bgw_info *)par->targinfo;
 //	u_int32_t downstream, upstream;
@@ -69,15 +69,10 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 
 	// this code doedn not work on openwrt an requires use of skb_header_pointer
 	//ip45h = (struct ip45hdr *)ip45_hdr(skb);
-	ip45h = skb_header_pointer(skb, 0, sizeof(_iph), &_iph);
-
-	if (ip45h == NULL) {
-		printk(KERN_INFO IPT_IP45_LOG_PREFIX "FATAL ERROR: Can't determine ip header\n");
-		return NF_DROP;
-	}
+	ip45h = skb_header_pointer(skb, 0, sizeof(_ip45h), &_ip45h);
 
 	/* check values in header - if the packet is not valit IP45 packet skipp bgw operations */
-	if (!is_ip45_pkt(ip45h)) {
+	if (ip45h == NULL || !is_ip45_pkt(ip45h)) {
 		if ( log ) {
 			printk(KERN_INFO IPT_IP45_LOG_PREFIX "NOT VALID IP45 PACKET " NIPFMT ":%d -> " NIPFMT ":%d (%d)",
 					NIPQUAD(ip45h->saddr), ntohs(ip45h->ip45sp),
@@ -168,7 +163,6 @@ static bool ip45bgw_tg_check(const struct xt_tgchk_param *par) {
 #endif
 	const struct ipt_ip45bgw_info *info = par->targinfo;
 
-	printk(KERN_INFO  "debug #1\n");
 	if ( (IPT_IP45_OPT_DOWNSTREAM & info->ip45flags) == 0 || (IPT_IP45_OPT_UPSTREAM & info->ip45flags) == 0 ) {
 		printk("IP45: you must specify both --" IPT_IP45_DOWNSTREAM " and --" IPT_IP45_UPSTREAM "\n");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
@@ -178,7 +172,6 @@ static bool ip45bgw_tg_check(const struct xt_tgchk_param *par) {
 #endif
     }
 
-	printk(KERN_INFO  "debug #2\n");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
 	return 0;
 #else 

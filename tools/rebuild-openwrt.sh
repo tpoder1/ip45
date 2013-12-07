@@ -28,6 +28,9 @@ function build_target {
 	fi
 	echo "CONFIG_PACKAGE_iptables=m" >> .config
 	echo "CONFIG_PACKAGE_ip45bgw=m" >> .config
+	echo "CONFIG_PACKAGE_lilo=n" >> .config
+	echo "CONFIG_ALL=y" >> .config
+
 	make defconfig > /dev/null 
 
 	make prepare || return

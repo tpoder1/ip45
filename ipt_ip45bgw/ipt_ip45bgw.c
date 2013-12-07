@@ -60,19 +60,34 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_action_param
 static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param *par) {
 #endif
 	//struct ip45hdr *ip45h = (struct ip45hdr *)ip_hdr(skb);
-	struct ip45hdr _ip45h;
+//	struct ip45hdr _ip45h;
 	struct ip45hdr *ip45h;
 	const struct ipt_ip45bgw_info *info = (struct ipt_ip45bgw_info *)par->targinfo;
 //	u_int32_t downstream, upstream;
 	int shlen = (32 - info->downstream_len) / 8; /* number of octets to shift */
 	int log = IPT_IP45_OPT_LOG & info->ip45flags;
 
-	// this code doedn not work on openwrt an requires use of skb_header_pointer
-	//ip45h = (struct ip45hdr *)ip45_hdr(skb);
-	ip45h = skb_header_pointer(skb, 0, sizeof(_ip45h), &_ip45h);
+/*
+	printk(KERN_INFO "DEBUX:#1 head %p nh %p mh %p data %p skblen %d len %d datalen %d\n", 
+		skb->head, skb->network_header, skb->mac_header, skb->data, skb_headlen(skb), 
+		skb->len, skb->data_len);
+*/
+
+	ip45h = (struct ip45hdr *)ip_hdr(skb);
+
+	/* this is incredibly ugly thing  ! */
+ 	/* In some cases (observer on openwrt with default build configuration */
+	/* the skb->network_header is set to null. We are not able to do */
+	/* anything about it. When openwrt is build with all packages the build goes ok */
+	/* this code prevents the system at least not to crash when packet arrives */ 
+	/* skb_network_pointer() cannot be used here */
+	if (ip45h == NULL) {
+		printk(KERN_ERR IPT_IP45_LOG_PREFIX "CANNOT DETECT PACKET HEADER (iptables build problem).\n");
+		return NF_DROP;
+	}
 
 	/* check values in header - if the packet is not valit IP45 packet skipp bgw operations */
-	if (ip45h == NULL || !is_ip45_pkt(ip45h)) {
+	if (!is_ip45_pkt(ip45h)) {
 		if ( log ) {
 			printk(KERN_INFO IPT_IP45_LOG_PREFIX "NOT VALID IP45 PACKET " NIPFMT ":%d -> " NIPFMT ":%d (%d)",
 					NIPQUAD(ip45h->saddr), ntohs(ip45h->ip45sp),
@@ -91,11 +106,6 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 		ip45bgw_log("INPUT", ip45h);
 	}
 	
-
-//	memcpy(&downstream, &info->downstream, sizeof(downstream));
-//	memcpy(&upstream, &info->upstream, sizeof(upstream));
-	
-
 	/* test whether the source address is part og downstream prefix  -> update return path */
 	/* shift address to right (32 - masklen) / 4 */
 	if ( (ip45h->saddr << shlen * 8) == (info->downstream << shlen * 8) ) {

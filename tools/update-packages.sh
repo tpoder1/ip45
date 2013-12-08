@@ -34,6 +34,14 @@ ln -fs ip45d-${VERSION}.tar.gz ip45d-latest.tar.gz
 
 cd ~/ip45
 
+# build ip45d package...
+echo "Building ip45d rpm  binaries..."
+rsync -a ~/packages/source/ip45d/ ~/rpmbuild/SOURCES
+cd ip45d
+rpmbuild -ba ip45d.spec 
+
+cd ~/ip45
+
 
 # build ip45d package...
 echo "Building ip45d windows binaries..."
@@ -58,7 +66,9 @@ ln -fs ipt_ip45bgw-${VERSION}.tar.gz ipt_ip45bgw-latest.tar.gz
 cd ~/ip45
 
 
+
+
 # rebuild openwrt packages 
-cd tools && ./rebuild-openwrt.sh
+#cd tools && ./rebuild-openwrt.sh
 
 

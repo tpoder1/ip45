@@ -106,7 +106,7 @@ int debug = 0;						/* 1 = debug mode */
 struct session_table_t sessions;
 
 void usage(void) {
-	printf("IP45 daemon version %s\n", VERSION);
+	printf("IP45 daemon version %s, package version: %s\n", VERSION, PKG_VERSION);
 	printf("Usage:\n");
 	printf("ip45d [ -D  ] [ -v ] \n");
 	printf(" -D : daemonize process - only on POSIX (non WINDOWS) platform\n");
@@ -408,7 +408,7 @@ static void daemonize_posix(void) {
 	}
 	/* If we got a good PID, then we can exit the parent process. */
 	if (pid > 0) {
-		exit(1);
+		exit(0);
 	}
 
 	/* At this point we are executing as the child process */

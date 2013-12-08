@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=ip45bgw
-PKG_VERSION:=0.150
+PKG_VERSION:=0.151
 PKG_RELEASE:=1
 
 PKG_SOURCE:=ipt_$(PKG_NAME)-$(PKG_VERSION).tar.gz
@@ -43,6 +43,7 @@ endef
 define Build/Prepare
 	$(call Build/Prepare/Default,)
 	$(CP) $(PKG_BUILD_DIR)/makefile.kernel $(PKG_BUILD_DIR)/Makefile
+	echo "ipt_ip45bgw" > $(PKG_BUILD_DIR)/46-ipt-ip45bgw
 endef
 
 define Build/Compile
@@ -52,10 +53,13 @@ define Build/Compile
 endef
 
 define Package/ip45bgw/install
-	$(INSTALL_DIR) $(1)/usr/lib
+	$(INSTALL_DIR) $(1)/usr/lib/iptables
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/libipt_ip45bgw.so $(1)/usr/lib
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/libipt_ip45bgw.so $(1)/usr/lib/iptables
 	$(INSTALL_DIR) $(1)/lib/modules/$(LINUX_VERSION)
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/ipt_ip45bgw.ko $(1)/lib/modules/$(LINUX_VERSION)
+	$(INSTALL_DIR) $(1)/etc/modules.d
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/46-ipt-ip45bgw $(1)/etc/modules.d
 endef
 
 

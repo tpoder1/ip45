@@ -45,12 +45,13 @@ static void ip45bgw_log(
 	char str[], 
 	struct ip45hdr *ip45h)
 {
-	printk(KERN_INFO IPT_IP45_LOG_PREFIX "%s " NIPFMT ":%d -> " NIPFMT ":%d [IP45 " NIP45FMT "/%d -> " NIP45FMT "/%d] [SID:%lX:%lX] \n", str,
+	printk(KERN_INFO IPT_IP45_LOG_PREFIX "%s " NIPFMT ":%d -> " NIPFMT ":%d [IP45 " NIP45FMT "/%d -> " NIP45FMT "/%d] [SID:%04X%04X:%04X%04X] \n", str,
 			NIPQUAD(ip45h->saddr), ntohs(ip45h->ip45sp),
 			NIPQUAD(ip45h->daddr), ntohs(ip45h->ip45dp),
 			NIP45QUAD(ip45h->s45stck), ip45h->s45mark,
 			NIP45QUAD(ip45h->d45stck), ip45h->d45mark,
-			(unsigned long)ip45h->sid.s45_sid64[0], (unsigned long)ip45h->sid.s45_sid64[1]);
+			(unsigned long)ip45h->sid.s45_sid32[0], (unsigned long)ip45h->sid.s45_sid32[1],
+			(unsigned long)ip45h->sid.s45_sid32[2], (unsigned long)ip45h->sid.s45_sid32[3]);
 
 }
 
@@ -97,6 +98,10 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 	}
 
 
+	if ( log ) {
+		ip45bgw_log("INPUT1", ip45h);
+	}
+
 	if (!skb_make_writable(skb, sizeof(struct ip45hdr))) {
 		pr_devel(IPT_IP45_LOG_PREFIX "unwriteable, dropped\n");
 		return NF_DROP;
@@ -105,10 +110,10 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 	if ( log ) {
 		ip45bgw_log("INPUT", ip45h);
 	}
-	
+
 	/* test whether the source address is part og downstream prefix  -> update return path */
 	/* shift address to right (32 - masklen) / 4 */
-	if ( (ip45h->saddr << shlen * 8) == (info->downstream << shlen * 8) ) {
+	if ( (ntohl(ip45h->saddr) >> shlen * 8) == (ntohl(info->downstream) >> shlen * 8) ) {
 		u_int32_t oldip = ip45h->saddr;
 
 		/* increase smark */
@@ -197,7 +202,7 @@ static struct xt_target ip45bgw_tg_reg __read_mostly = {
 	.targetsize	= sizeof(struct ipt_ip45bgw_info),
 	.table		= "mangle",
 //	.table		= "nat",
-	.hooks		= (1 << NF_INET_POST_ROUTING) | (1 << NF_INET_PRE_ROUTING) ,
+	.hooks		= (1 << NF_INET_POST_ROUTING) | (1 << NF_INET_PRE_ROUTING) | (1 << NF_INET_FORWARD),
 	.me 		= THIS_MODULE,
 };
 

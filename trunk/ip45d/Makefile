@@ -2,7 +2,7 @@
 revision = $(shell cat ../ID | grep Revision | cut -d" " -f2)
 version=0.$(revision)
 distdir = ip45d-$(version)
-prefix=/
+prefix :=/
 
 main:
 	gcc -I../common -I. -O3 -DPKG_VERSION=\"$(version)\" -Wall -o ip45d ip45d.c inet_ntop45.c session_table.c
@@ -16,8 +16,10 @@ clean:
 	rm -f ip45d *.exe  
 
 install:
-	cp ip45d /usr/sbin
-	cp ip45d-init-d /etc/init.d/ip45d
+	mkdir -p $(prefix)/usr/sbin
+	cp ip45d $(prefix)/usr/sbin
+	mkdir -p $(prefix)/etc/init.d/
+	cp ip45d-init-d $(prefix)/etc/init.d/ip45d
 
 dist:  
 	mkdir $(distdir)

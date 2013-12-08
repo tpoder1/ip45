@@ -97,11 +97,6 @@ static unsigned int ip45bgw_tg(struct sk_buff *skb, const struct xt_target_param
 		return XT_CONTINUE;
 	}
 
-
-	if ( log ) {
-		ip45bgw_log("INPUT1", ip45h);
-	}
-
 	if (!skb_make_writable(skb, sizeof(struct ip45hdr))) {
 		pr_devel(IPT_IP45_LOG_PREFIX "unwriteable, dropped\n");
 		return NF_DROP;

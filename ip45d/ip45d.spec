@@ -1,5 +1,5 @@
 Name: 		ip45d
-Version: 	0.154
+Version: 	0.156
 #Release:	1%{?dist}
 Release:	1
 Summary:	IP45 daemon

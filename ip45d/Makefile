@@ -18,8 +18,8 @@ clean:
 install:
 	mkdir -p $(prefix)/usr/sbin
 	cp ip45d $(prefix)/usr/sbin
-	mkdir -p $(prefix)/etc/init.d/
-	cp ip45d-init-d $(prefix)/etc/init.d/ip45d
+	mkdir -p $(prefix)/etc/rc.d/init.d/
+	cp ip45d-init-d $(prefix)/etc/rc.d/init.d/ip45d
 
 dist:  
 	mkdir $(distdir)

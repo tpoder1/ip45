@@ -37,7 +37,7 @@ rm -rf %{buildroot}
 
 %files
 %defattr(-,root,root,-)
-%{_sysconfdir}/init.d/ip45d
+%{_sysconfdir}/rc.d/init.d/ip45d
 %{_sbindir}/ip45d
 # %doc
 

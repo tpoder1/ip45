@@ -362,6 +362,7 @@ int init_sock() {
 #ifdef WIN32
 	if (( sock = WSASocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP, NULL, 0, WSA_FLAG_OVERLAPPED)) == INVALID_SOCKET) {
 		LOG("WSASocket failed with error: %d\n", WSAGetLastError());
+		closesocket(sock);	
 		return -1;
 	}
 #else 
@@ -384,8 +385,13 @@ int init_sock() {
 	ls.sin_port = htons(IP45_COMPAT_UDP_PORT);
 	//ls.sin_port = IP45_COMPAT_UDP_PORT;
 	if (bind(sock, (struct sockaddr *)&ls, sizeof(struct sockaddr_in)) < 0 ) {
+#ifdef WIN32
+		LOG("WSASocket failed with error: %d\n", WSAGetLastError());
+		closesocket(sock);	
+#else 
 		perror("bind"); 
 		return -1;
+#endif
 	}
 	
 	return sock;

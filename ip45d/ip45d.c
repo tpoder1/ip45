@@ -336,12 +336,15 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt, struct sockaddr_
 		tmp.proto = ip6h->ip6_nxt;
 		tmp.sport = dport;
 		tmp.dport = sport;
+		//tmp.sid.s45_sid32[0] = 10;
 		mksid(&tmp.sid);
 		tmp.last_45port = IP45_COMPAT_UDP_PORT;
 		ses_rec = session_table_add(&sessions, &tmp);
-		DEBUG("new sid %016lx:%016lx created\n", 
-				(unsigned long)tmp.sid.s45_sid64[0], 
-				(unsigned long)tmp.sid.s45_sid64[1]);
+		DEBUG("new sid %08lx%08lx%08lx%08lx created\n", 
+				ntohl((unsigned int)tmp.sid.s45_sid32[0]), 
+				ntohl((unsigned int)tmp.sid.s45_sid32[1]), 
+				ntohl((unsigned int)tmp.sid.s45_sid32[2]), 
+				ntohl((unsigned int)tmp.sid.s45_sid32[3]));
 	}
 
 	/* create IP45 header */
@@ -603,10 +606,12 @@ init_sock:
 			if (verbose_opt) {
 				inet_ntop45((char *)&s45addr, saddr, IP45_ADDR_LEN);
 		
-				DEBUG("Received IP45 packet %s->{me}, sid=%016lx:%016lx, proto=%d\n", 
+				DEBUG("Received IP45 packet %s->{me}, sid %08lx%08lx%08lx%08lx, proto %d\n", 
 					saddr,  
-					(unsigned long)ip45h->sid.s45_sid64[0], 
-					(unsigned long)ip45h->sid.s45_sid64[1], 
+					ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[0]), 
+					ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[1]), 
+					ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[2]), 
+					ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[3]),
 					ip45h->nexthdr);
 			}
 
@@ -998,10 +1003,12 @@ DWORD WINAPI sock_to_tun_loop(  LPVOID lpParam ) {
 
 //		if (verbose_opt) {
 			inet_ntop45((char *)&s45addr, saddr, IP45_ADDR_LEN);
-			DEBUG("Received IP45 packet %s->{me}, sid=%016lx:%016lx, proto=%d, bytes=%d\n",
+			DEBUG("Received IP45 packet %s->{me}, sid %08lx%08lx%08lx%08lx, proto %d, bytes %d\n", 
 				saddr,  
-				(unsigned long)rcv_ip45h->sid.s45_sid64[0], 
-				(unsigned long)rcv_ip45h->sid.s45_sid64[1], 
+				ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[0]), 
+				ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[1]), 
+				ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[2]), 
+				ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[3]),
 				rcv_ip45h->nexthdr, (int)sock_len);
 //		}
 

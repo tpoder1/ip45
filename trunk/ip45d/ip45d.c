@@ -156,9 +156,10 @@ int len;
 void mksid(struct in45_sid *sid) {
 	int i; 
 
-	if  ( RAND_MAX < 0xFFFF ) {
+	if  ( RAND_MAX < 0xFFFF) {
 		for (i = 0 ; i < sizeof(sid->s45_sid16) / sizeof(uint16_t); i++) {
-			sid->s45_sid16[i] = rand();
+			sid->s45_sid16[i] = i;
+			//sid->s45_sid16[i] = rand();
 		}
 	} else {
 		for (i = 0 ; i < sizeof(sid->s45_sid32) / sizeof(uint32_t); i++) {
@@ -340,7 +341,7 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt, struct sockaddr_
 		mksid(&tmp.sid);
 		tmp.last_45port = IP45_COMPAT_UDP_PORT;
 		ses_rec = session_table_add(&sessions, &tmp);
-		DEBUG("new sid %08lx%08lx%08lx%08lx created\n", 
+		DEBUG("new sid %08x.%08x.%08x.%08x created\n", 
 				ntohl((unsigned int)tmp.sid.s45_sid32[0]), 
 				ntohl((unsigned int)tmp.sid.s45_sid32[1]), 
 				ntohl((unsigned int)tmp.sid.s45_sid32[2]), 
@@ -606,12 +607,12 @@ init_sock:
 			if (verbose_opt) {
 				inet_ntop45((char *)&s45addr, saddr, IP45_ADDR_LEN);
 		
-				DEBUG("Received IP45 packet %s->{me}, sid %08lx%08lx%08lx%08lx, proto %d\n", 
+				DEBUG("Received IP45 packet %s->{me}, sid %08x.%08x.%08x.%08x, proto %d\n", 
 					saddr,  
-					ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[0]), 
-					ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[1]), 
-					ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[2]), 
-					ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[3]),
+					ntohl((unsigned int)ip45h->sid.s45_sid32[0]), 
+					ntohl((unsigned int)ip45h->sid.s45_sid32[1]), 
+					ntohl((unsigned int)ip45h->sid.s45_sid32[2]), 
+					ntohl((unsigned int)ip45h->sid.s45_sid32[3]),
 					ip45h->nexthdr);
 			}
 
@@ -1003,7 +1004,7 @@ DWORD WINAPI sock_to_tun_loop(  LPVOID lpParam ) {
 
 //		if (verbose_opt) {
 			inet_ntop45((char *)&s45addr, saddr, IP45_ADDR_LEN);
-			DEBUG("Received IP45 packet %s->{me}, sid %08lx%08lx%08lx%08lx, proto %d, bytes %d\n", 
+			DEBUG("Received IP45 packet %s->{me}, sid %08x.%08x.%08x.%08x, proto %d, bytes %d\n", 
 				saddr,  
 				ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[0]), 
 				ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[1]), 

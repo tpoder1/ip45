@@ -152,6 +152,21 @@ int len;
     return (answer);
 }
 
+/* generates the random SID */
+void mksid(struct in45_sid *sid) {
+	int i; 
+
+	if  ( RAND_MAX < 0xFFFF ) {
+		for (i = 0 ; i < sizeof(sid->s45_sid16) / sizeof(uint16_t); i++) {
+			sid->s45_sid16[i] = rand();
+		}
+	} else {
+		for (i = 0 ; i < sizeof(sid->s45_sid32) / sizeof(uint32_t); i++) {
+			sid->s45_sid32[i] = rand();
+		}
+	}
+}
+
 
 /* process IP45 packet and prepare it as IPv6 packet*/
 /* !1 - we expect that ipv6 buffer is big enough to handle data */
@@ -321,10 +336,7 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt, struct sockaddr_
 		tmp.proto = ip6h->ip6_nxt;
 		tmp.sport = dport;
 		tmp.dport = sport;
-		tmp.sid.s45_sid32[0] = rand();
-		tmp.sid.s45_sid32[1] = rand();
-		tmp.sid.s45_sid32[2] = rand();
-		tmp.sid.s45_sid32[3] = rand();
+		mksid(&tmp.sid);
 		tmp.last_45port = IP45_COMPAT_UDP_PORT;
 		ses_rec = session_table_add(&sessions, &tmp);
 		DEBUG("new sid %016lx:%016lx created\n", 

@@ -12,6 +12,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
+
 
 #ifdef __APPLE__
 #include <netinet/in.h>
@@ -187,9 +189,10 @@ ssize_t ip45_to_ipv6(struct sockaddr_in *peer45_addr, char *ip45pkt, ssize_t len
 
 		memcpy(&tmp.init_s45addr, &s45addr, sizeof(struct in45_addr));
 		/* some system do not accept ::a.b.c.d address so we have to help wit that */
+		/* converting address to 255.a.b.c.d */
 	
 		if (ip45h->s45mark == 0) {
-			((char *)&tmp.init_s45addr)[10] = 0xF;
+			((char *)&tmp.init_s45addr)[11] = 0xFF;
 		}
 	
 		tmp.proto = ip45h->nexthdr;
@@ -197,7 +200,7 @@ ssize_t ip45_to_ipv6(struct sockaddr_in *peer45_addr, char *ip45pkt, ssize_t len
 		tmp.sid.s45_sid64[1] = ip45h->sid.s45_sid64[1];
 		tmp.last_45port = ntohs(peer45_addr->sin_port);
 		ses_rec = session_table_add(&sessions, &tmp);
-		DEBUG("New remote session sid:%lx:%lx\n", 
+		DEBUG("New remote session sid: %016lx:%016lx\n", 
 					(unsigned long)ip45h->sid.s45_sid64[0], 
 					(unsigned long)ip45h->sid.s45_sid64[1]);
 	}
@@ -318,11 +321,13 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt, struct sockaddr_
 		tmp.proto = ip6h->ip6_nxt;
 		tmp.sport = dport;
 		tmp.dport = sport;
-		tmp.sid.s45_sid64[0] = rand();
-		tmp.sid.s45_sid64[1] = rand();
+		tmp.sid.s45_sid32[0] = rand();
+		tmp.sid.s45_sid32[1] = rand();
+		tmp.sid.s45_sid32[2] = rand();
+		tmp.sid.s45_sid32[3] = rand();
 		tmp.last_45port = IP45_COMPAT_UDP_PORT;
 		ses_rec = session_table_add(&sessions, &tmp);
-		DEBUG("new sid %lx:%lx created\n", 
+		DEBUG("new sid %016lx:%016lx created\n", 
 				(unsigned long)tmp.sid.s45_sid64[0], 
 				(unsigned long)tmp.sid.s45_sid64[1]);
 	}
@@ -1118,6 +1123,7 @@ int main(int argc, char *argv[]) {
 #endif
 
 	session_table_init(&sessions);
+	srand(time(NULL) + clock());
 
 #ifdef WIN32
 	return main_loop_win(verbose_opt);

@@ -342,10 +342,10 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt, struct sockaddr_
 		tmp.last_45port = IP45_COMPAT_UDP_PORT;
 		ses_rec = session_table_add(&sessions, &tmp);
 		DEBUG("new sid %08x.%08x.%08x.%08x created\n", 
-				ntohl((unsigned int)tmp.sid.s45_sid32[0]), 
-				ntohl((unsigned int)tmp.sid.s45_sid32[1]), 
-				ntohl((unsigned int)tmp.sid.s45_sid32[2]), 
-				ntohl((unsigned int)tmp.sid.s45_sid32[3]));
+				(unsigned int)ntohl((unsigned int)tmp.sid.s45_sid32[0]), 
+				(unsigned int)ntohl((unsigned int)tmp.sid.s45_sid32[1]), 
+				(unsigned int)ntohl((unsigned int)tmp.sid.s45_sid32[2]), 
+				(unsigned int)ntohl((unsigned int)tmp.sid.s45_sid32[3]));
 	}
 
 	/* create IP45 header */
@@ -609,10 +609,10 @@ init_sock:
 		
 				DEBUG("Received IP45 packet %s->{me}, sid %08x.%08x.%08x.%08x, proto %d\n", 
 					saddr,  
-					ntohl((unsigned int)ip45h->sid.s45_sid32[0]), 
-					ntohl((unsigned int)ip45h->sid.s45_sid32[1]), 
-					ntohl((unsigned int)ip45h->sid.s45_sid32[2]), 
-					ntohl((unsigned int)ip45h->sid.s45_sid32[3]),
+					(unsigned int)ntohl((unsigned int)ip45h->sid.s45_sid32[0]), 
+					(unsigned int)ntohl((unsigned int)ip45h->sid.s45_sid32[1]), 
+					(unsigned int)ntohl((unsigned int)ip45h->sid.s45_sid32[2]), 
+					(unsigned int)ntohl((unsigned int)ip45h->sid.s45_sid32[3]),
 					ip45h->nexthdr);
 			}
 
@@ -1006,10 +1006,10 @@ DWORD WINAPI sock_to_tun_loop(  LPVOID lpParam ) {
 			inet_ntop45((char *)&s45addr, saddr, IP45_ADDR_LEN);
 			DEBUG("Received IP45 packet %s->{me}, sid %08x.%08x.%08x.%08x, proto %d, bytes %d\n", 
 				saddr,  
-				ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[0]), 
-				ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[1]), 
-				ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[2]), 
-				ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[3]),
+				(unsigned int)ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[0]), 
+				(unsigned int)ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[1]), 
+				(unsigned int)ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[2]), 
+				(unsigned int)ntohl((unsigned int)rcv_ip45h->sid.s45_sid32[3]),
 				rcv_ip45h->nexthdr, (int)sock_len);
 //		}
 

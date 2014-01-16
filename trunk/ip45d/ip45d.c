@@ -158,8 +158,7 @@ void mksid(struct in45_sid *sid) {
 
 	if  ( RAND_MAX < 0xFFFF) {
 		for (i = 0 ; i < sizeof(sid->s45_sid16) / sizeof(uint16_t); i++) {
-			sid->s45_sid16[i] = i;
-			//sid->s45_sid16[i] = rand();
+			sid->s45_sid16[i] = rand();
 		}
 	} else {
 		for (i = 0 ; i < sizeof(sid->s45_sid32) / sizeof(uint32_t); i++) {

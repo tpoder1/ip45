@@ -982,7 +982,16 @@ DWORD WINAPI sock_to_tun_loop(  LPVOID lpParam ) {
 		}
 		*/
 
-		if ( (int)sock_len < sizeof(struct ip45hdr_p3) ) {
+		if ( (int)sock_len <= 0 ) {
+			if (WSAGetLastError() == WSAECONNRESET) {
+				LOG("Connection reseted by peer\n");
+			} else {
+			 	LOG("Recv socket error: %d\n", WSAGetLastError());
+			}
+			continue;
+		}
+
+		if ( (int)sock_len < (int)sizeof(struct ip45hdr_p3) ) {
 			LOG("Received too short IP45 packet\n");
 			continue;
 		}

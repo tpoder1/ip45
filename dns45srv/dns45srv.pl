@@ -5,6 +5,7 @@ my $LOGFACILITY	= "daemon.info";
 my $LOGNAME		= substr($0, rindex($0, "/") + 1);
 my $DEBUG		= 0;
 my $LOGLEVEL	= 0;
+$0 = $LOGNAME;
  
 use strict;
 use warnings;

@@ -50,6 +50,10 @@
 
 #ifdef __APPLE__
 #include <net/if.h>
+#include <sys/socket.h>
+#include <sys/sys_domain.h>
+#include <sys/kern_control.h>
+#include <net/if_utun.h>
 #endif
 
 #include <ip45.h>
@@ -78,6 +82,7 @@
 #define TUNDEV_NAME "/dev/tun4"
 #define TUNIF_NAME "tun4"
 #define TUNIF_CMD "/sbin/ifconfig %s inet6 %s/%d up"
+#define UTUNIF_NUM 45
 #endif
 
 #ifdef WIN32 

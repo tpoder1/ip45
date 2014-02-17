@@ -121,15 +121,6 @@ int tun_alloc_posix(char *dev) {
 		perror("ioctl TUNSIFHEAD: ");
 		return -1;
 	}
-
-	/* try to create the device */
-/*
-	if( (err = ioctl(fd, SIOCGIFFLAGS, (void *) &ifr)) < 0 ) {
-		perror("ioctl SIOCGIFFLAGS: ");
-		close(fd);
-		return err;
-	}
-*/
 #endif
 
 	strcpy(dev, ifr.ifr_name);
@@ -170,9 +161,8 @@ int utun_alloc_apple(char *dev) {
 	sc.sc_len = sizeof(sc);
 	sc.sc_family = AF_SYSTEM;
 	sc.ss_sysaddr = AF_SYS_CONTROL;
-	sc.sc_unit = 2;	/* Only have one, in this example... */
+	sc.sc_unit = (UTUNIF_NUM + 1);	
 	
-
 	// If the connect is successful, a tun%d device will be created, where "%d"
  	// is our unit number -1
 
@@ -188,6 +178,11 @@ int utun_alloc_apple(char *dev) {
 
 /* POSIX only: main loop */
 int main_loop_posix(int verbose_opt) {
+	
+	/* buf6 is same as ip6h on most platforms */
+	/* however darwin utun device uses extra 32bit header */
+	/* to identigy protocol family. On such platforms */
+	/* ip6h is buf6 + 32bit (the size of offset is set into striphdr) */
 
 	char tun_name[IFNAMSIZ] = TUNIF_NAME;
 	char buf45[PKT_BUF_SIZE];
@@ -203,15 +198,25 @@ int main_loop_posix(int verbose_opt) {
 	ssize_t len;
 	char cmdbuf[1024];
 	int ret;
+	int striphdr = 0;
 
 #ifdef __APPLE__
 	if ( (tunfd = utun_alloc_apple(tun_name)) < 0 ) {
-#else
-	if ( (tunfd = tun_alloc_posix(tun_name)) < 0 ) {
-#endif 
+		uint32_t *tmp;
+		
+		striphdr = sizeof(uint32_t);
+		tmp = (void *)buf6;	
+		*tmp = 0x1E;
+		ip6h = (void *)buf6 + striphdr;
 		LOG("ERROR Cant initialize ip45 on interface\n");
 		exit(2);
 	}
+#else
+	if ( (tunfd = tun_alloc_posix(tun_name)) < 0 ) {
+		LOG("ERROR Cant initialize ip45 on interface\n");
+		exit(2);
+	}
+#endif 
 
 	LOG("ip45 device: %s\n", tun_name);
 	
@@ -226,8 +231,6 @@ int main_loop_posix(int verbose_opt) {
 		LOG("OK\n");
 	}
 	
-	
-
 init_sock:
 	if ((sockfd = init_sock_posix()) < 0) {
 		LOG("Cant initialize ip45 socket\n");
@@ -291,6 +294,7 @@ init_sock:
 					ip45h->nexthdr);
 			}
 
+			len += striphdr;
 
 			if ( (len = write(tunfd, buf6, len) ) < 0 ) {
 				perror("send tunfd");
@@ -305,7 +309,9 @@ init_sock:
 				continue;
 			}
 
-			len = ipv6_to_ip45(buf6, len, buf45, &peer45_addr);
+			len -= striphdr;
+
+			len = ipv6_to_ip45((char *)ip6h, len, buf45, &peer45_addr);
 
 			if (len <= 0) {
 				if (len < 0) {

@@ -8,7 +8,7 @@ main:
 	gcc -I../common -I. -O3 -DPKG_VERSION=\"$(version)\" -Wall -o ip45d ip45d_common.c ip45d_posix.c ip45d.c inet_ntop45.c session_table.c
 
 win:
-	i686-pc-mingw32-gcc -DPKG_VERSION=\"$(version)\"  ip45d_common.c ip45d.c inet_ntop45.c session_table.c compat_win.c -o ip45d.exe -I ../common -DWIN32 -DWIN32_LEAN_AND_MEAN -D__LITTLE_ENDIAN__ -Wall -lkernel32 -lwsock32 -lws2_32
+	i686-pc-mingw32-gcc -DPKG_VERSION=\"$(version)\"  ip45d_common.c ip45d_win.c ip45d.c inet_ntop45.c session_table.c compat_win.c -o ip45d.exe -I ../common -DWIN32 -DWIN32_LEAN_AND_MEAN -D__LITTLE_ENDIAN__ -Wall -lkernel32 -lwsock32 -lws2_32
 	i686-pc-mingw32-gcc  ip45serv.c -o ip45serv.exe -DWIN32 -D_UNICODE -DUNICODE -Wall -lkernel32 -lwsock32 -lws2_32
 	makensis ip45.nsi 
 

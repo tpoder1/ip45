@@ -81,7 +81,7 @@ void daemonize_posix(void) {
 	freopen( "/dev/null", "w", stderr);
 }
 
-/* POSIX only: alloc tun device */
+/* POSIX only: alloc tun device, generic call work for linux and TunTap driver on OSX */
 int tun_alloc_posix(char *dev) {
 
 	struct ifreq ifr;
@@ -115,6 +115,8 @@ int tun_alloc_posix(char *dev) {
 #endif 
 
 #ifdef __APPLE__
+	/* on OSX the utun (see utun_alloc_apple) is prefered to use */
+	/* this code coul work with TunTap driver from http://tuntaposx.sourceforge.net/ */
 	if (ioctl(fd, TUNSIFHEAD, &no) < 0) {
 		perror("ioctl TUNSIFHEAD: ");
 		return -1;
@@ -135,6 +137,55 @@ int tun_alloc_posix(char *dev) {
 	return fd;
 }
 
+/* apple specific code - utun is build in as the part of OSX */
+/* code  inspired by http://newosxbook.com/src.jl?tree=listings&file=17-15-utun.c */
+#ifdef __APPLE__
+int utun_alloc_apple(char *dev) {
+//int
+//tun(void)
+//{
+	struct sockaddr_ctl sc;
+	struct ctl_info ctlInfo;
+	int fd;
+
+	memset(&ctlInfo, 0, sizeof(ctlInfo));
+	if (strlcpy(ctlInfo.ctl_name, UTUN_CONTROL_NAME, sizeof(ctlInfo.ctl_name)) >=
+	    sizeof(ctlInfo.ctl_name)) {
+		fprintf(stderr,"UTUN_CONTROL_NAME too long");
+		return -1;
+	}
+	fd = socket(PF_SYSTEM, SOCK_DGRAM, SYSPROTO_CONTROL);
+ 	
+	if (fd == -1) {
+		perror ("socket(SYSPROTO_CONTROL)");
+		return -1;
+	}
+	if (ioctl(fd, CTLIOCGINFO, &ctlInfo) == -1) {
+		perror ("ioctl(CTLIOCGINFO)");
+		close(fd);
+		return -1;
+	}
+
+	sc.sc_id = ctlInfo.ctl_id;
+	sc.sc_len = sizeof(sc);
+	sc.sc_family = AF_SYSTEM;
+	sc.ss_sysaddr = AF_SYS_CONTROL;
+	sc.sc_unit = 2;	/* Only have one, in this example... */
+	
+
+	// If the connect is successful, a tun%d device will be created, where "%d"
+ 	// is our unit number -1
+
+	if (connect(fd, (struct sockaddr *)&sc, sizeof(sc)) == -1) {
+		perror ("connect(AF_SYS_CONTROL)");
+		close(fd);
+		return -1;
+	}
+	sprintf(dev, "utun%d", sc.sc_unit - 1);
+	return fd;
+}
+#endif
+
 /* POSIX only: main loop */
 int main_loop_posix(int verbose_opt) {
 
@@ -153,10 +204,15 @@ int main_loop_posix(int verbose_opt) {
 	char cmdbuf[1024];
 	int ret;
 
+#ifdef __APPLE__
+	if ( (tunfd = utun_alloc_apple(tun_name)) < 0 ) {
+#else
 	if ( (tunfd = tun_alloc_posix(tun_name)) < 0 ) {
+#endif 
 		LOG("ERROR Cant initialize ip45 on interface\n");
 		exit(2);
 	}
+
 	LOG("ip45 device: %s\n", tun_name);
 	
 	// config virtual interface

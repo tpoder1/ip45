@@ -1,3 +1,9 @@
+/*
+ IP45 
+ Copyright (c) 2013 - 2014 Tomas Podermanski
+ License: GPL version 3 or higher, http://www.gnu.org/licenses/gpl.html
+*/
+
 
 
 #include "ip45d.h"

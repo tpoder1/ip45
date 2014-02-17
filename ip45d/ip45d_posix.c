@@ -1,3 +1,15 @@
+/*
+
+  IP45 Project - http://ip45.org
+
+  Copyright (C) 2012 - 2014,  Tomas Podermanski
+
+  This code can be redistributed and/or modfied under the terms of 
+  the GNU General Public License as published by the Free Software 
+  Foundation, either version 3 of the License, or (at your option) 
+  any later version, see <http://www.gnu.org/licenses/>.
+
+*/
 
 
 #include "ip45d.h"
@@ -199,7 +211,10 @@ int main_loop_posix(int verbose_opt) {
 	char cmdbuf[1024];
 	int ret;
 	int striphdr = 0;
+#ifdef __APPLE__
 	uint32_t *tmp;
+#endif 
+
 
 	if ( (tunfd = tun_alloc_posix(tun_name)) < 0 ) {
 #ifdef __APPLE__

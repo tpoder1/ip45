@@ -1,3 +1,15 @@
+/*
+
+  IP45 Project - http://ip45.org
+
+  Copyright (C) 2012 - 2014,  Tomas Podermanski
+
+  This code can be redistributed and/or modfied under the terms of 
+  the GNU General Public License as published by the Free Software 
+  Foundation, either version 3 of the License, or (at your option) 
+  any later version, see <http://www.gnu.org/licenses/>.
+
+*/
 
 
 extern unsigned char local_addr[16];

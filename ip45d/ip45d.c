@@ -69,7 +69,7 @@
 #include <fcntl.h>
 #include "ip45d_common.h"
 #include "inet_ntop45.h"
-#include "session_table.h"
+//#include "session_table.h"
 
 
 #define PKT_BUF_SIZE 2600

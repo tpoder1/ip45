@@ -3,12 +3,13 @@
 # script peridically check SVN and in there is change new 
 # packages in packages directory are rebuilt (not part of SVN) 
 
-VERSION=0.$(cat ../ID | grep Revision | cut -d" " -f2)
 
 cd ~
 
 # checkout svn 
 svn -q checkout https://ip45.googlecode.com/svn/trunk/ ip45 --username tpoder@cis.vutbr.cz
+
+VERSION=0.$(cat ip45/ID | grep Revision | cut -d" " -f2)
 
 # are there any changes ? 
 diff ip45/ID ip45/ID.last 

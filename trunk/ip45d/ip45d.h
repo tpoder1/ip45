@@ -64,5 +64,28 @@
 #define LOCAL_IPV6_ADDR "0:0:0:0:0:1:0:0"
 #define LOCAL_IPV6_MASKLEN 8
 
+#ifdef __linux
+#include <linux/if.h>
+#include <linux/if_tun.h>
+#define TUNDEV_NAME "/dev/net/tun"
+#define TUNIF_NAME "ip45"
+#define TUNIF_CMD "/sbin/ifconfig %s add %s/%d up"
+#endif
+
+#ifdef __APPLE__
+#include <net/if.h>
+#include "tun_ioctls.h"
+#define TUNDEV_NAME "/dev/tun4"
+#define TUNIF_NAME "tun4"
+#define TUNIF_CMD "/sbin/ifconfig %s inet6 %s/%d up"
+#endif
+
+#ifdef WIN32 
+#define MAX_KEY_LENGTH 255
+#define MAX_VALUE_NAME 16383
+#define TUNIF_NAME "ip45"
+#endif
+
+
 
 

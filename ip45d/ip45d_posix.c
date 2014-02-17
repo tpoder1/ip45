@@ -199,24 +199,24 @@ int main_loop_posix(int verbose_opt) {
 	char cmdbuf[1024];
 	int ret;
 	int striphdr = 0;
+	uint32_t *tmp;
 
+	if ( (tunfd = tun_alloc_posix(tun_name)) < 0 ) {
 #ifdef __APPLE__
-	if ( (tunfd = utun_alloc_apple(tun_name)) < 0 ) {
-		uint32_t *tmp;
-		
+		/* we were not able to open TunTap so we try to open utun (OSX generic driver) */
+		if ( (tunfd = utun_alloc_apple(tun_name)) < 0 ) {
+			LOG("ERROR Cant initialize ip45 on interface\n");
+			exit(2);
+		}
 		striphdr = sizeof(uint32_t);
 		tmp = (void *)buf6;	
-		*tmp = 0x1E;
+		*tmp = 0x1E; /* IPv6 on APPLE */
 		ip6h = (void *)buf6 + striphdr;
-		LOG("ERROR Cant initialize ip45 on interface\n");
-		exit(2);
-	}
 #else
-	if ( (tunfd = tun_alloc_posix(tun_name)) < 0 ) {
 		LOG("ERROR Cant initialize ip45 on interface\n");
 		exit(2);
-	}
 #endif 
+	}
 
 	LOG("ip45 device: %s\n", tun_name);
 	

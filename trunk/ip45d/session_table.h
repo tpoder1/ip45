@@ -1,37 +1,6 @@
 
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <stdint.h>
-#include <fcntl.h>
-
-#ifdef WIN32
-#include <windows.h>
-#include <winbase.h>
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <winioctl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include "tap-windows.h"
-#include "ether.h"
-#include "ip6.h"
-#include "icmp6.h"
-#include "compat_win.h"
-#endif
-
-#ifdef __linux 
-#include <netinet/in.h>
-#endif
-
-#ifdef __APPLE__
-#include <netinet/in.h>
-#endif
-
-#include <ip45.h>
+//#include "ip45d.h"
 
 struct session_entry_t  {
 	uint64_t init_s45addr[2];

@@ -1,103 +1,97 @@
 
-The ip45 userspace host implementation
+The ip45 user space host implementation
+
+The source is available in the form of [package](http://ip45.org/packages/source/ip45d/) or in the SVN 
+[repository](http://code.google.com/p/ip45/source/browse/#svn%2Ftrunk%2Fip45d).
+
+Running the program
+-------------------
+* On the command line execute the ip45d: 
+
+		# ./ip45d -v 
+
+It sets up virtual tun/tup interface and configure the address on it. On the 
+windows platform ip45d.exe must be used instead. 
+
+		# ip45d.exe -v 
+
+On the windows platform IPv6 address ::1:0:0/8 must be configured 
+on the tap interface.
 
 
-
-===========================================================================
 Building and Installation
-===========================================================================
+-------------------------
 
-For Unix-Like systems (Linux, OSX):
+* For Unix-Like systems (Linux, OSX):
 
-# make 
+		# make
 
-Creates ip45d executable that can be run with root privileges
+  Creates ip45d executable that can be run on system with root privileges. 
 
+* To install binary into system use:
 
+		# make install 
 
-# make install 
+* To build rpm packages:
 
-To install binary into system 
+		# rpmbuild -ba ip45d.spec
 
+* For Windows system (cross build on Unix):
 
+		# make win 
 
-# rpmbuild -ba ip45d.spec
-
-To build rpm packages 
-
-
-
-For Windows system (cross build on Unix):
-
-# make win 
-
-Build binnary package and creates ip45d.exe ip45serv.exe and ip45setup.exe
+  Builds binary package and creates ip45d.exe ip45serv.exe and ip45setup.exe
 
 
+* For Windows system (on Windows with mingw installed): 
 
-For Windows system (on Windows with mingw installed) 
+		# make.bat
 
-# make.bat
-
-Builds ip45d.exe and ip45serv.exe 
+  Builds ip45d.exe and ip45serv.exe 
 
 
 
-===========================================================================
+
 Structure of Files 
-===========================================================================
+------------------
 
 The code is divided into several files: 
 
-ip45d.c             - Entry rutine, help scrren (cals functions in 
-                      ip45d_common.c, ip45d_posix.c, ip45d_win.c)
-ip45d.h             - Platform dependend includes 
+* ip45d.c           - Entry routine, help screen (calls functions in 
+                      ip45d_common.c, ip45d_posix.c, ip45d_win.c).
 
-ip45d_common.c      - Code shared by all platforms (conversion if IPv6 packet 
-                      to IP45packet and back)
+* ip45d.h           - Platform depended includes.
+
+* ip45d_common.c    - Code shared by all platforms (conversion if IPv6 packet 
+                      to Ip45 packet and back)
                       
-ip45d_posix.c       - Code related to posix platforms (Linux, OSX), implemented 
-                      as single therad application. For OSX it usees platform 
+* ip45d_posix.c     - Code related to posix platforms (Linux, OSX), implemented 
+                      as single thread application. For OSX it users platform 
                       specific code to use utun device. 
 
-ip45d_win.c         - Code related to Windows platform, implemented as two 
+* ip45d_win.c       - Code related to Windows platform, implemented as two 
                       thread application using non blocking system operations. 
 
-session_table.c     - Implementation of session table. Implemented as 
+* session_table.c   - Implementation of session table. Implemented as 
                       the simple linked list. 
 
-inet_ntop45.c       - Conversion to humman readable IP45 address and back. 
+* inet_ntop45.c     - Conversion to human readable IP45 address and back. 
 
-ip45serv.c          - System service fo Windows (internally calls ip45d.exe). Use 
+* ip45serv.c        - System service fog Windows (internally calls ip45d.exe). Use 
                       ip45serv.exe to get more help.
 
-compat_win.c        - Implementation inet_pton and inet_ntop function for Windows 
+* compat_win.c      - Implementation inet_pton and inet_ntop function for Windows 
                       platform. 
 
-ip45d-init-d        - The starting script for Linux. The file shoul be copied to 
+* ip45d-init-d      - The starting script for Linux. The file should be copied to 
                       /etc/init.d/ip45d.
 
-ip45d.spec          - Specfile for creating rpm package. The rpm package can be 
+* ip45d.spec        - Specfile for creating rpm package. The rpm package can be 
                       installed later into Linux-based systems.
  
-ip45.nsi            - Installer script for NSIS. Creates installabe package 
+* ip45.nsi          - Installer script for NSIS. Creates installation package 
                       ip45seup.exe that can be used for installation of ip45 on 
                       Windows platforms. 
 
-*.h                 - The header files that are not shipped by default on all platforms. 
-
-
-===========================================================================
-License 
-===========================================================================
-
-IP45 Project - http://ip45.org
-
-Copyright (C) 2012 - 2014,  Tomas Podermanski
-
-This code can be redistributed and/or modfied under the terms of 
-the GNU General Public License as published by the Free Software 
-Foundation, either version 3 of the License, or (at your option) 
-any later version, see <http://www.gnu.org/licenses/>.
-
+* *.h               - The header files that are not shipped by default on all platforms. 
 

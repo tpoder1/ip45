@@ -30,3 +30,10 @@ ssize_t ip45_to_ipv6(struct sockaddr_in *peer45_addr, char *ip45pkt, ssize_t len
 /* !1 - we expect that ipv6 buffer is big enough to handle data */
 ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt, struct sockaddr_in *peer45_addr);
 
+/* build the ICMPv6 packets (IPv6 + ICMPv6 part) */
+/* the buffer have to contain enough space to   */
+/* build the requested packet including the body part */
+/* the packet have to have prepared src and dst address */
+int build_icmp6_pkt(char *pkt, unsigned char type, unsigned char code, char *body, int body_len);
+
+

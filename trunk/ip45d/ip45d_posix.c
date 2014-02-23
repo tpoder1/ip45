@@ -309,6 +309,7 @@ init_sock:
 					ip45h->nexthdr);
 			}
 
+
 			len += striphdr;
 
 			if ( (len = write(tunfd, buf6, len) ) < 0 ) {
@@ -325,6 +326,24 @@ init_sock:
 			}
 
 			len -= striphdr;
+
+			/* check whether the destination address is ::/8 */
+			if (ip6h->ip6_dst.s6_addr[0] != 0) {
+				if (verbose_opt) {
+					inet_ntop(AF_INET6, (char *)&ip6h->ip6_dst, daddr, IP45_ADDR_LEN);
+					DEBUG("Invalid destination address %s, sending back ICMPv6\n", daddr);
+				}
+
+				len = build_icmp6_pkt((char *)ip6h, 1, 2, NULL, 0);
+	
+				len += striphdr;
+
+				if ( (len = write(tunfd, buf6, len) ) < 0 ) {
+					perror("send tunfd");
+				}
+
+				continue;
+			}
 
 			len = ipv6_to_ip45((char *)ip6h, len, buf45, &peer45_addr);
 

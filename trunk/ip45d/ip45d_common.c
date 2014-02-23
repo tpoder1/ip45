@@ -16,6 +16,7 @@
 #include "ip45d_common.h"
 #include "session_table.h"
 #include "inet_ntop45.h"
+#include <icmp6.h>
 
 
 uint16_t inet_cksum(addr, len) 
@@ -269,5 +270,55 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt, struct sockaddr_
 
 	return datalen + sizeof(struct ip45hdr_p3);
 }
+
+/* build the ICMPv6 packets (IPv6 + ICMPv6 part) */
+/* the buffer have to contain enough space to   */
+/* build the requested packet including the body part */
+int build_icmp6_pkt(char *pkt, unsigned char type, unsigned char code, char *body, int body_len) {
+
+    struct ip6_hdr *ip6h = (void *)pkt;
+    struct icmp6_hdr *icmp6h = (void *)pkt + sizeof(struct ip6_hdr);
+
+	ip6h->ip6_flow = htonl ((6 << 28) | (0 << 20) | 0); 
+	ip6h->ip6_plen = htons(sizeof(struct ip6_hdr) + body_len);
+	ip6h->ip6_nxt = IPPROTO_ICMPV6;
+	icmp6h->icmp6_type = type;
+	icmp6h->icmp6_code = code;
+	icmp6h->icmp6_code = code;
+
+	if (body != NULL && body_len > 0) {
+		memcpy(&icmp6h->icmp6_dataun, body, body_len);
+	}
+	
+
+    {
+    uint32_t ip6nxt = htonl(ip6h->ip6_nxt);
+    uint32_t icmp_len = htonl(sizeof(struct ip6_hdr) + body_len);
+    char xbuf[PKT_BUF_SIZE];
+    int xptr = 0;
+
+    /* an ugly way to cumpute TCP checksum - to be repaired */
+    icmp6h->icmp6_cksum = 0x0;
+    memcpy(xbuf + xptr, (char *)&(ip6h->ip6_src), sizeof(struct in6_addr));
+    xptr += sizeof(ip6h->ip6_src);
+    memcpy(xbuf + xptr, &ip6h->ip6_dst, sizeof(ip6h->ip6_dst));
+    xptr += sizeof(ip6h->ip6_dst);
+    memcpy(xbuf + xptr, &icmp_len, sizeof(uint32_t));
+    xptr += sizeof(uint32_t);
+    memcpy(xbuf + xptr, &ip6nxt, sizeof(ip6nxt));
+    xptr += sizeof(ip6nxt);
+    memcpy(xbuf + xptr, icmp6h, ntohl(icmp_len));
+
+
+    xptr += ntohl(icmp_len);
+    icmp6h->icmp6_cksum = inet_cksum(xbuf, xptr);
+
+    }
+
+    return sizeof(struct ip6_hdr) + body_len;
+}
+
+
+
 
 

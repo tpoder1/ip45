@@ -16,6 +16,7 @@
 #include "ip45d_common.h"
 #include "session_table.h"
 #include "inet_ntop45.h"
+#include "icmp6.h"
 
 
 /* initialize output socket */
@@ -312,6 +313,7 @@ init_sock:
 
 			len += striphdr;
 
+
 			if ( (len = write(tunfd, buf6, len) ) < 0 ) {
 				perror("send tunfd");
 			}
@@ -334,9 +336,12 @@ init_sock:
 					DEBUG("Invalid destination address %s, sending back ICMPv6\n", daddr);
 				}
 
-				len = build_icmp6_pkt((char *)ip6h, 1, 2, NULL, 0);
+				len = build_tcp_rst((char *)ip6h);
+				//len = build_icmp6_pkt((char *)ip6h, ICMP6_DST_UNREACH, ICMP6_DST_UNREACH_NOROUTE, NULL, 0);
 	
 				len += striphdr;
+
+				printf("XXX %d\n", len);
 
 				if ( (len = write(tunfd, buf6, len) ) < 0 ) {
 					perror("send tunfd");

@@ -36,4 +36,8 @@ ssize_t ipv6_to_ip45(char *ip6pkt, ssize_t len6, char *ip45pkt, struct sockaddr_
 /* the packet have to have prepared src and dst address */
 int build_icmp6_pkt(char *pkt, unsigned char type, unsigned char code, char *body, int body_len);
 
+/* build the TCP RST packet */
+/* the buffer have to contain enough space to   */
+/* build the requested packet including the body part */
+int build_tcp_rst(char *pkt);
 

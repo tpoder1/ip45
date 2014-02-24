@@ -278,22 +278,44 @@ int build_icmp6_pkt(char *pkt, unsigned char type, unsigned char code, char *bod
 
     struct ip6_hdr *ip6h = (void *)pkt;
     struct icmp6_hdr *icmp6h = (void *)pkt + sizeof(struct ip6_hdr);
+	struct in6_addr tmp;
+	char orig_hdr[sizeof(struct ip6_hdr) + 8]; 
 
+	/* store 8 bytes of original header */ 
+	memcpy(orig_hdr, pkt, sizeof(orig_hdr));
+
+	/* swap source and destination address */
+	memcpy(&tmp, &ip6h->ip6_dst, sizeof(struct in6_addr));
+	memcpy(&ip6h->ip6_dst, &ip6h->ip6_src, sizeof(struct in6_addr));
+	memcpy(&ip6h->ip6_src, &tmp, sizeof(struct in6_addr));
+	
 	ip6h->ip6_flow = htonl ((6 << 28) | (0 << 20) | 0); 
-	ip6h->ip6_plen = htons(sizeof(struct ip6_hdr) + body_len);
 	ip6h->ip6_nxt = IPPROTO_ICMPV6;
 	icmp6h->icmp6_type = type;
-	icmp6h->icmp6_code = code;
 	icmp6h->icmp6_code = code;
 
 	if (body != NULL && body_len > 0) {
 		memcpy(&icmp6h->icmp6_dataun, body, body_len);
+	} else {
+		memset((char *)&icmp6h->icmp6_dataun, 0, 4);
+		body_len = 4;
+		
+		/* copy 8 bytes from original header */
+		memcpy((char *)&icmp6h->icmp6_dataun + 4, orig_hdr, sizeof(orig_hdr));
+		body_len += sizeof(orig_hdr);
 	}
 	
+	ip6h->ip6_plen = htons(sizeof(struct icmp6_hdr) + body_len);
+
+	/* align packet to minimum IPv6 packet size */
+/*	if (ntohs(ip6h->ip6_plen) < 40) {
+		ip6h->ip6_plen = htons(40 + ntohs(ip6h->ip6_plen));
+	}
+*/
 
     {
     uint32_t ip6nxt = htonl(ip6h->ip6_nxt);
-    uint32_t icmp_len = htonl(sizeof(struct ip6_hdr) + body_len);
+    uint32_t icmp_len = htonl(ntohs(ip6h->ip6_plen));
     char xbuf[PKT_BUF_SIZE];
     int xptr = 0;
 
@@ -309,14 +331,77 @@ int build_icmp6_pkt(char *pkt, unsigned char type, unsigned char code, char *bod
     xptr += sizeof(ip6nxt);
     memcpy(xbuf + xptr, icmp6h, ntohl(icmp_len));
 
-
     xptr += ntohl(icmp_len);
     icmp6h->icmp6_cksum = inet_cksum(xbuf, xptr);
 
     }
 
-    return sizeof(struct ip6_hdr) + body_len;
+
+    return ntohs(ip6h->ip6_plen) + sizeof(struct ip6_hdr);
 }
+
+/* build the TCP RST packet */
+/* the buffer have to contain enough space to   */
+/* build the requested packet including the body part */
+int build_tcp_rst(char *pkt) {
+
+    struct ip6_hdr *ip6h = (void *)pkt;
+    struct tcphdr *tcph = (void *)pkt + sizeof(struct ip6_hdr);
+	struct in6_addr tmp_addr;
+	uint16_t tmp_port;
+
+	/* swap source and destination address */
+	memcpy(&tmp_addr, &ip6h->ip6_dst, sizeof(struct in6_addr));
+	memcpy(&ip6h->ip6_dst, &ip6h->ip6_src, sizeof(struct in6_addr));
+	memcpy(&ip6h->ip6_src, &tmp_addr, sizeof(struct in6_addr));
+
+	
+	ip6h->ip6_flow = htonl ((6 << 28) | (0 << 20) | 0); 
+	ip6h->ip6_nxt = IPPROTO_TCP;
+	tcph->th_flags = TH_RST | TH_ACK;
+	tmp_port = tcph->th_dport;
+	tcph->th_dport = tcph->th_sport;
+	tcph->th_dport = tmp_port;
+	tcph->th_ack = htonl(ntohl(tcph->th_seq) + 1);
+	tcph->th_seq = 0x0;
+	
+	tcph->th_off = (uint8_t)sizeof(struct tcphdr)/4;
+	ip6h->ip6_plen = htons(sizeof(struct tcphdr));
+
+	/* align packet to minimum IPv6 packet size */
+	/*
+	if (ntohs(ip6h->ip6_plen) < 40) {
+		ip6h->ip6_plen = htons(40 + ntohs(ip6h->ip6_plen));
+	}
+	*/
+
+    {
+    uint32_t ip6nxt = htonl(ip6h->ip6_nxt);
+    uint32_t tcp_len = htonl(ntohs(ip6h->ip6_plen));
+    char xbuf[PKT_BUF_SIZE];
+    int xptr = 0;
+
+    /* an ugly way to cumpute TCP checksum - to be repaired */
+    tcph->th_sum = 0x0;
+    memcpy(xbuf + xptr, (char *)&(ip6h->ip6_src), sizeof(struct in6_addr));
+    xptr += sizeof(ip6h->ip6_src);
+    memcpy(xbuf + xptr, &ip6h->ip6_dst, sizeof(ip6h->ip6_dst));
+    xptr += sizeof(ip6h->ip6_dst);
+    memcpy(xbuf + xptr, &tcp_len, sizeof(uint32_t));
+    xptr += sizeof(uint32_t);
+    memcpy(xbuf + xptr, &ip6nxt, sizeof(ip6nxt));
+    xptr += sizeof(ip6nxt);
+    memcpy(xbuf + xptr, tcph, ntohl(tcp_len));
+
+    xptr += ntohl(tcp_len);
+    tcph->th_sum = inet_cksum(xbuf, xptr);
+
+    }
+
+    return ntohs(ip6h->ip6_plen) + sizeof(struct ip6_hdr);
+}
+
+
 
 
 

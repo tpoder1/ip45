@@ -313,7 +313,6 @@ init_sock:
 
 			len += striphdr;
 
-
 			if ( (len = write(tunfd, buf6, len) ) < 0 ) {
 				perror("send tunfd");
 			}
@@ -333,15 +332,16 @@ init_sock:
 			if (ip6h->ip6_dst.s6_addr[0] != 0) {
 				if (verbose_opt) {
 					inet_ntop(AF_INET6, (char *)&ip6h->ip6_dst, daddr, IP45_ADDR_LEN);
-					DEBUG("Invalid destination address %s, sending back ICMPv6\n", daddr);
+					DEBUG("Invalid destination address %s, sending back TCP-RESET or ICMPv6 UNREACHABLE\n", daddr);
 				}
-
-				len = build_tcp_rst((char *)ip6h);
-				//len = build_icmp6_pkt((char *)ip6h, ICMP6_DST_UNREACH, ICMP6_DST_UNREACH_NOROUTE, NULL, 0);
+			
+				if (ip6h->ip6_nxt == IPPROTO_TCP) {
+					len = build_tcp_rst((char *)ip6h);
+				} else {
+					len = build_icmp6_pkt((char *)ip6h, ICMP6_DST_UNREACH, ICMP6_DST_UNREACH_NOROUTE, NULL, 0);
+				}
 	
 				len += striphdr;
-
-				printf("XXX %d\n", len);
 
 				if ( (len = write(tunfd, buf6, len) ) < 0 ) {
 					perror("send tunfd");
@@ -358,7 +358,6 @@ init_sock:
 				}
 				continue;
 			}
-
 
 			if (verbose_opt) {
 				inet_ntop(AF_INET6, (char *)&ip6h->ip6_src, saddr, IP45_ADDR_LEN);

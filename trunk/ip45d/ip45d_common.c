@@ -355,25 +355,21 @@ int build_tcp_rst(char *pkt) {
 	memcpy(&ip6h->ip6_dst, &ip6h->ip6_src, sizeof(struct in6_addr));
 	memcpy(&ip6h->ip6_src, &tmp_addr, sizeof(struct in6_addr));
 
-	
-	ip6h->ip6_flow = htonl ((6 << 28) | (0 << 20) | 0); 
 	ip6h->ip6_nxt = IPPROTO_TCP;
 	tcph->th_flags = TH_RST | TH_ACK;
 	tmp_port = tcph->th_dport;
 	tcph->th_dport = tcph->th_sport;
-	tcph->th_dport = tmp_port;
+	tcph->th_sport = tmp_port;
+
 	tcph->th_ack = htonl(ntohl(tcph->th_seq) + 1);
+
 	tcph->th_seq = 0x0;
+	tcph->th_win = 0x0;
+	tcph->th_urp = 0x0;
+	tcph->th_x2 = 0x0;
 	
 	tcph->th_off = (uint8_t)sizeof(struct tcphdr)/4;
 	ip6h->ip6_plen = htons(sizeof(struct tcphdr));
-
-	/* align packet to minimum IPv6 packet size */
-	/*
-	if (ntohs(ip6h->ip6_plen) < 40) {
-		ip6h->ip6_plen = htons(40 + ntohs(ip6h->ip6_plen));
-	}
-	*/
 
     {
     uint32_t ip6nxt = htonl(ip6h->ip6_nxt);

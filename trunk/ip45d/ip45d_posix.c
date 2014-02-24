@@ -328,6 +328,14 @@ init_sock:
 
 			len -= striphdr;
 
+			if (ip6h->ip6_dst.s6_addr[0] == 0xFF) {
+				if (verbose_opt) {
+					inet_ntop(AF_INET6, (char *)&ip6h->ip6_dst, daddr, IP45_ADDR_LEN);
+					DEBUG("Silently dopped multicast packet %s\n", daddr);
+				}
+				continue;
+			}
+
 			/* check whether the destination address is ::/8 */
 			if (ip6h->ip6_dst.s6_addr[0] != 0) {
 				if (verbose_opt) {

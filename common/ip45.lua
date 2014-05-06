@@ -24,8 +24,8 @@ function ip45_proto.dissector(buffer,pinfo,tree)
     -- get a dissector, that will parse the next header payload
     local dis = DissectorTable.get("ip.proto"):get_dissector(nh)
     subtree:add(next_header, buffer(0,1), string.format("%s (%d)", tostring(dis), nh))
-    subtree:add(smark, buffer(1,1), buffer(1,1):bitfield(4,4))
-    subtree:add(dmark, buffer(1,1), buffer(1,1):bitfield(0,4))
+    subtree:add(smark, buffer(1,1), buffer(1,1):bitfield(0,4))
+    subtree:add(dmark, buffer(1,1), buffer(1,1):bitfield(4,4))
     subtree:add(padding, buffer(2,2))
     -- use ipv4 function to convert bytes, instead of iteration through the 12 bytes field
     local s1 = tostring(buffer(4,4):ipv4())
